@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Поиск матчей 2-0 / 0-2</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Поиск матчей (HT 2-0 / 0-2)</h1>
+
+    <div class="info">
+      Критерии: счёт в перерыве строго <b>2-0</b> или <b>0-2</b>; средний голов у каждой команды ≤ <b>1.5</b> (последние 7 матчей); проверка каждые 15 минут; топ-лиги Европы; ищем тотал Under 3.5 / 4.0.
+    </div>
+
+    <div class="controls">
+      <button id="startBtn">Пуск</button>
+      <button id="stopBtn">Выход</button>
+      <button id="installBtn" style="display:none">Установить</button>
+    </div>
+
+    <div id="status" class="status">Статус: готов</div>
+    <div id="log" class="log"></div>
+  </div>
+
+  <audio id="beep" src="notify.wav" preload="auto"></audio>
+
+  <script src="app.js"></script>
+</body>
+</html>
