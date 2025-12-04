@@ -8,3 +8,4 @@ function playTripleBeep() {
     setTimeout(() => new Audio(beepData).play(), 250); 
     setTimeout(() => new Audio(beepData).play(), 500);
 }
+playTripleBeep();
