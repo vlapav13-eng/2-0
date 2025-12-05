@@ -1,158 +1,168 @@
-// app.js — текстовые сообщения и кнопки на русском
 const API_KEY = "403e0d7c0f2f236034cf0475570195be";
-const API_BASE = "https://v3.football.api-sports.io/";
-let timer = null;
 
-const logEl = document.getElementById('log');
-const statusEl = document.getElementById('status');
-const beep = document.getElementById('beep');
-const startBtn = document.getElementById('startBtn');
-const stopBtn = document.getElementById('stopBtn');
-const installBtn = document.getElementById('installBtn');
+let timerInterval = null;
+let scanInterval = null;
+let nextScan = 12 * 60;
+let running = false;
 
-function log(msg) {
-  const t = new Date().toLocaleString();
-  logEl.textContent = `[${t}] ${msg}\n` + logEl.textContent;
+// Лиги (без женских)
+const leagues = [
+    39, 40, 41, 42, 61, 78, 135, 140,
+    2, 3, 4, 5, 566, 556, 302
+];
+
+document.getElementById("startBtn").onclick = () => startScanning();
+document.getElementById("stopBtn").onclick = () => stopScanning();
+
+function startScanning() {
+    if (running) return;
+
+    running = true;
+    document.getElementById("startBtn").classList.add("active");
+    document.getElementById("status").textContent = "Проверка включена…";
+
+    runScan();
+    startTimer();
 }
 
-async function checkOnce() {
-  try {
-    statusEl.textContent = "Статус: проверка...";
-    const url = API_BASE + "fixtures?live=all&timezone=Europe/Kyiv";
-    const resp = await fetch(url, { headers: { "x-apisports-key": API_KEY } });
-    if (!resp.ok) {
-      log("Ошибка API: HTTP " + resp.status);
-      statusEl.textContent = "Статус: ошибка API " + resp.status;
-      return;
-    }
-    const data = await resp.json();
-    if (!data.response) {
-      log("Ответ API не содержит response.");
-      statusEl.textContent = "Статус: нет данных";
-      return;
-    }
+function stopScanning() {
+    running = false;
+    clearInterval(timerInterval);
+    clearInterval(scanInterval);
 
-    log("Найдено live-матчей: " + data.response.length);
-    const found = [];
+    document.getElementById("startBtn").classList.remove("active");
+    document.getElementById("timer").textContent = "—:—";
+    document.getElementById("status").textContent = "Остановлено";
+}
 
-    for (const m of data.response) {
-      const ht = m.score && m.score.halftime;
-      if (!ht) continue;
-      const h = ht.home, a = ht.away;
-      if (!((h === 2 && a === 0) || (h === 0 && a === 2))) continue;
-      found.push(m);
-    }
+function startTimer() {
+    nextScan = 12 * 60;
 
-    if (found.length === 0) {
-      log("Подходящих матчей не найдено.");
-      statusEl.textContent = "Статус: проверено, совпадений нет";
-      return;
-    }
+    timerInterval = setInterval(() => {
+        if (!running) return;
 
-    log("Найдены подходящие матчи: " + found.length);
+        let min = Math.floor(nextScan / 60);
+        let sec = nextScan % 60;
 
-    for (const m of found) {
-      const homeId = m.teams.home.id;
-      const awayId = m.teams.away.id;
-      const league = m.league && m.league.name ? m.league.name : "Лига";
-      const scoreStr = (m.score && m.score.halftime) ? (m.score.halftime.home + "-" + m.score.halftime.away) : "HT";
-      try {
-        const hResp = await fetch(API_BASE + "fixtures?team=" + homeId + "&last=7", { headers: { "x-apisports-key": API_KEY } });
-        const aResp = await fetch(API_BASE + "fixtures?team=" + awayId + "&last=7", { headers: { "x-apisports-key": API_KEY } });
-        const hData = await hResp.json();
-        const aData = await aResp.json();
-        const hAvg = calcAvgGoals(homeId, hData.response || []);
-        const aAvg = calcAvgGoals(awayId, aData.response || []);
-        const oddsResp = await fetch(API_BASE + "odds?fixture=" + m.fixture.id, { headers: { "x-apisports-key": API_KEY } });
-        const oddsData = await oddsResp.json();
-        const oddsVal = parseOdds(oddsData);
-        const meets = (hAvg <= 1.5 && aAvg <= 1.5) && oddsVal.found;
-        const line = `${league} | ${m.teams.home.name} ${scoreStr} ${m.teams.away.name} — Avg: ${hAvg} | ${aAvg} — Odds: ${oddsVal.value || "N/A"} — Подходит: ${meets}`;
-        log(line);
-        if (meets) {
-          try { beep.currentTime = 0; await beep.play(); } catch(e) { /* autoplay может быть заблокирован */ }
-          if (Notification && Notification.permission === "granted") {
-            navigator.serviceWorker.getRegistration().then(reg => {
-              if (reg) reg.showNotification("Halftime Checker", { body: line, icon: "icons/icon-192.svg" });
-            });
-          }
+        document.getElementById("timer").textContent =
+            `${min}:${sec < 10 ? "0" : ""}${sec}`;
+
+        nextScan--;
+
+        if (nextScan < 0) {
+            nextScan = 12 * 60;
+            runScan();
         }
-      } catch (e) {
-        log("Ошибка при доп. запросах: " + e);
-      }
-    }
-
-    statusEl.textContent = "Статус: проверка завершена";
-  } catch (e) {
-    log("Ошибка в checkOnce: " + e);
-    statusEl.textContent = "Статус: ошибка";
-  }
+    }, 1000);
 }
 
-function calcAvgGoals(teamId, fixtures) {
-  let scored = 0, played = 0;
-  for (const f of fixtures) {
-    const isHome = (f.teams && f.teams.home && f.teams.home.id === teamId);
-    const goals = isHome ? (f.goals && f.goals.home) : (f.goals && f.goals.away);
-    if (typeof goals === 'number') { scored += goals; played++; }
-  }
-  if (played === 0) return 999;
-  return Math.round((scored / played) * 100) / 100;
-}
+async function runScan() {
+    if (!running) return;
 
-function parseOdds(oddsData) {
-  try {
-    if (!oddsData || !oddsData.response) return {found:false, value:null};
-    for (const it of oddsData.response) {
-      const bookies = it.bookies || it.bookmakers || [];
-      for (const b of bookies) {
-        const markets = b.markets || [];
-        for (const m of markets) {
-          const key = (m.key || "").toLowerCase();
-          if (key.includes("tot") || key.includes("total")) {
-            for (const bet of (m.bets || [])) {
-              const name = bet.name || "";
-              if (name.includes("Under") && (name.includes("3.5") || name.includes("4"))) {
-                return {found:true, value: bet.value};
-              }
+    document.getElementById("status").textContent = "Идет поиск…";
+
+    let matchesFound = [];
+
+    for (let league of leagues) {
+        const live = await fetch(
+            `https://v3.football.api-sports.io/fixtures?live=all&league=${league}`,
+            { headers: { "x-apisports-key": API_KEY } }
+        );
+        const json = await live.json();
+
+        const games = json.response;
+
+        for (let g of games) {
+            const ht = g.score.halftime;
+
+            if (ht.home === 2 && ht.away === 0 || ht.home === 0 && ht.away === 2) {
+
+                let odds = await getTotals(g.fixture.id);
+
+                matchesFound.push({
+                    league: g.league.name,
+                    home: g.teams.home.name,
+                    away: g.teams.away.name,
+                    ht: `${ht.home}-${ht.away}`,
+                    odd35: odds.o35,
+                    odd40: odds.o40
+                });
             }
-          }
         }
-      }
     }
-  } catch(e) {}
-  return {found:false, value:null};
+
+    showMatches(matchesFound);
 }
 
-// Управление кнопками (русские подписи)
-startBtn.addEventListener('click', async () => {
-  if (timer) return;
-  if (Notification && Notification.permission !== "granted") {
-    try { await Notification.requestPermission(); } catch(e) {}
-  }
-  timer = setInterval(checkOnce, 15 * 60 * 1000);
-  log("Проверки включены (каждые 15 минут).");
-  checkOnce();
-});
+async function getTotals(fixtureId) {
+    try {
+        const res = await fetch(
+            `https://v3.football.api-sports.io/odds?fixture=${fixtureId}`,
+            { headers: { "x-apisports-key": API_KEY } }
+        );
 
-stopBtn.addEventListener('click', () => {
-  if (timer) { clearInterval(timer); timer = null; log("Проверки остановлены."); statusEl.textContent = "Статус: остановлено"; }
-});
+        const json = await res.json();
+        if (!json.response.length) return { o35: "—", o40: "—" };
 
-// Регистрация service worker и обработка приглашения на установку
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js').then(reg => {
-    console.log('SW зарегистрирован', reg);
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      // Покажем русскую кнопку установки
-      installBtn.style.display = 'inline-block';
-      installBtn.textContent = 'Установить';
-      installBtn.addEventListener('click', () => { e.prompt(); });
+        const bookmakers = json.response[0].bookmakers;
+        if (!bookmakers.length) return { o35: "—", o40: "—" };
+
+        let odd35 = "—";
+        let odd40 = "—";
+
+        for (let book of bookmakers) {
+            for (let bet of book.bets) {
+                if (bet.name === "Totals") {
+                    for (let v of bet.values) {
+                        if (v.value === "3.5") odd35 = v.odd;
+                        if (v.value === "4.0") odd40 = v.odd;
+                    }
+                }
+            }
+        }
+
+        return { o35: odd35, o40: odd40 };
+
+    } catch {
+        return { o35: "—", o40: "—" };
+    }
+}
+
+function showMatches(arr) {
+    const box = document.getElementById("matches");
+    box.innerHTML = "";
+
+    if (arr.length === 0) {
+        document.getElementById("status").textContent = "Совпадений нет";
+        document.getElementById("status").className = "status red";
+        return;
+    }
+
+    document.getElementById("status").textContent = "Матчи найдены!";
+    document.getElementById("status").className = "status green";
+
+    playTripleBeep();
+
+    arr.forEach(m => {
+        box.innerHTML += `
+            <div class="match-card">
+                <b>${m.home} — ${m.away}</b><br>
+                Лига: ${m.league}<br>
+                HT: ${m.ht}<br>
+                ТМ 3.5: <b>${m.odd35}</b><br>
+                ТМ 4.0: <b>${m.odd40}</b>
+            </div>
+        `;
     });
-  }).catch(err => {
-    log('SW регистрация не удалась: ' + err);
-  });
-} else {
-  log('Service worker не поддерживается на этом устройстве.');
 }
+
+function playTripleBeep() {
+    const sound = new Audio("data:audio/wav;base64,UklGRrQAAABXQVZFZm10IBAAAAABAAEA..."); 
+    sound.play();
+    setTimeout(() => sound.play(), 400);
+    setTimeout(() => sound.play(), 800);
+}
+
+      
+  
+ 
