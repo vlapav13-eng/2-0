@@ -1,32 +1,47 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Поиск матчей 2-0 / 0-2</title>
-  <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Поиск матчей (HT 2-0 / 0-2)</title>
+    <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="container">
+
     <h1>Поиск матчей (HT 2-0 / 0-2)</h1>
 
-    <div class="info">
-      Критерии: счёт в перерыве строго <b>2-0</b> или <b>0-2</b>; средний голов у каждой команды ≤ <b>1.5</b> (последние 7 матчей); проверка каждые 15 минут; топ-лиги Европы; ищем тотал Under 3.5 / 4.0.
-    </div>
-
     <div class="controls">
-      <button id="startBtn">Пуск</button>
-      <button id="stopBtn">Выход</button>
-      <button id="installBtn" style="display:none">Установить</button>
+        <button id="startButton">ПУСК</button>
+        <button id="stopButton">СТОП</button>
+        <div id="timer">12:00</div>
     </div>
 
-    <div id="status" class="status">Статус: готов</div>
-    <div id="log" class="log"></div>
-  </div>
+    <div id="status" class="status">Ожидание…</div>
 
-  <audio id="beep" src="notify.wav" preload="auto"></audio>
+    <h3>История проверки:</h3>
+    <div id="log" class="logBox"></div>
 
-  <script src="app.js"></script>
+    <h3>Статистика за 5 дней:</h3>
+    <div id="stats" class="statsBox"></div>
+
+    <audio id="alertSound" src="alert.mp3"></audio>
+
+    <script src="script.js"></script>
 </body>
 </html>
+
+        
+   
+
+
+
+
+ 
+
+
+
+  
+      
+    
+   
+
