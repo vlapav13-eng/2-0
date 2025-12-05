@@ -1,44 +1,33 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Поиск матчей (HT 2-0 / 0-2)</title>
-  <link rel="stylesheet" href="style.css" />
+    <meta charset="UTF-8">
+    <title>Поиск матчей HT 2-0 / 0-2</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="container">
-    <h1>Поиск матчей (HT 2-0 / 0-2)</h1>
 
-    <p class="criteria">
-      Ищем матчи в перерыве (HT) со счётом 2-0 или 0-2. Лиги: Европа + ТОП-10 мира. Проверка каждые 12 минут.
-    </p>
+<div class="app">
+    <h2>Поиск матчей (HT 2-0 / 0-2)</h2>
 
-    <div class="controls">
-      <button id="startButton">ПУСК</button>
-      <button id="stopButton" class="btn-red">СТОП</button>
-      <div id="timer">12:00</div>
-    </div>
+    <button id="startBtn" class="btn">ПУСК</button>
+    <button id="stopBtn" class="btn red">СТОП</button>
 
-    <div id="status" class="status">Ожидание...</div>
+    <div id="timer" class="timer">—:—</div>
 
-    <h3>Найденные матчи (если есть) :</h3>
-    <div id="matches" class="matchesBox">Пока нет результатов</div>
+    <h3>Статус:</h3>
+    <div id="status" class="status">Ожидание…</div>
 
-    <h3>История:</h3>
-    <div id="log" class="logBox"></div>
+    <h3>Найденные матчи:</h3>
+    <div id="matches"></div>
+</div>
 
-    <h3>Статистика (сегодня):</h3>
-    <div id="stats" class="statsBox">0 найдено сегодня</div>
-  </div>
-
-  <!-- Звуковой файл: если не загрузишь alert.mp3 в репозиторий, звук не будет играть.
-       Можно использовать внешнюю ссылку или data: если хочешь, пришлю mp3 как dataURL. -->
-  <audio id="alertSound" preload="auto" src="alert.mp3"></audio>
-
-  <script src="script.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
+
+   
+ 
 
     
         
