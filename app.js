@@ -139,7 +139,7 @@ async function runCheck() {
 
     let matchesFound = [];
 
-    for (let league of TOP_46_LEAGUES) {
+    for (let league of LEAGUES) {
         const url = `https://v3.football.api-sports.io/fixtures?league=${league}&live=all`;
         const response = await fetch(url, {
             headers: { "x-rapidapi-key": API_KEY }
