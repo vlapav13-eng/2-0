@@ -9,53 +9,9 @@ let countdown = 12 * 60;
 let timerInterval = null;
 let checkIntervalId = null;
 
-const LEAGUES = [
-  "England: Premier League",
-  "Spain: La Liga",
-  "Germany: Bundesliga",
-  "Italy: Serie A",
-  "France: Ligue 1",
-  "Portugal: Primeira Liga",
-  "Netherlands: Eredivisie",
-  "Belgium: Jupiler Pro League",
-  "Turkey: Super Lig",
-  "Greece: Super League",
-  "Austria: Bundesliga",
-  "Switzerland: Super League",
-  "Denmark: Superliga",
-  "Norway: Eliteserien",
-  "Sweden: Allsvenskan",
-  "Poland: Ekstraklasa",
-  "Czech Republic: First League",
-  "Croatia: HNL",
-  "Serbia: SuperLiga",
-  "Ukraine: Premier League",
-  "Russia: Premier League",
-  "Scotland: Premiership",
-  "Hungary: NB I",
-  "Romania: Liga I",
-  "Slovakia: Super Liga",
-  "Slovenia: PrvaLiga",
-  "Bulgaria: First League",
-  "Israel: Ligat ha'Al",
-  "Cyprus: First Division",
-  "USA: MLS",
-  "Brazil: Serie A",
-  "Argentina: Liga Profesional",
-  "Mexico: Liga MX",
-  "Chile: Primera División",
-  "Uruguay: Primera División",
-  "Colombia: Liga BetPlay",
-  "Ecuador: Serie A",
-  "Peru: Liga 1",
-  "Paraguay: Primera División",
-  "Japan: J1 League",
-  "South Korea: K League 1",
-  "China: Super League",
-  "Saudi Arabia: Pro League",
-  "UAE: Pro League",
-  "Qatar: Stars League",
-  "Australia: A-League"
+
+  
+  
 ];
 ];
 
