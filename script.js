@@ -212,8 +212,8 @@ async function checkMatchesReal() {
         awayName: away.name,
         scoreHome: goals.home,
         scoreAway: goals.away,
-        homeAvgLast7: homeStats.avg,
-        awayAvgLast7: awayStats.avg,
+        homeAvgLast5: homeStats.avg,
+        awayAvgLast5: awayStats.avg,
         projectedTotal,
         under35,
         under40
