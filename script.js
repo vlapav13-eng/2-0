@@ -9,10 +9,54 @@ let countdown = 12 * 60;
 let timerInterval = null;
 let checkIntervalId = null;
 
-const leaguesAllowed = [
-  "England Premier League","Spain La Liga","Italy Serie A","Germany Bundesliga","France Ligue 1",
-  "Netherlands Eredivisie","Belgium First Division A","Portugal Primeira Liga","Turkey Super Lig","Scotland Premiership",
-  "USA MLS","Brazil Serie A","Argentina Liga Profesional","Japan J1 League","South Korea K League 1","Saudi Arabia Pro League"
+ const LEAGUES = [
+  "England: Premier League",
+  "Spain: La Liga",
+  "Germany: Bundesliga",
+  "Italy: Serie A",
+  "France: Ligue 1",
+  "Portugal: Primeira Liga",
+  "Netherlands: Eredivisie",
+  "Belgium: Jupiler Pro League",
+  "Turkey: Super Lig",
+  "Greece: Super League",
+  "Austria: Bundesliga",
+  "Switzerland: Super League",
+  "Denmark: Superliga",
+  "Norway: Eliteserien",
+  "Sweden: Allsvenskan",
+  "Poland: Ekstraklasa",
+  "Czech Republic: First League",
+  "Croatia: HNL",
+  "Serbia: SuperLiga",
+  "Ukraine: Premier League",
+  "Russia: Premier League",
+  "Scotland: Premiership",
+  "Hungary: NB I",
+  "Romania: Liga I",
+  "Slovakia: Super Liga",
+  "Slovenia: PrvaLiga",
+  "Bulgaria: First League",
+  "Israel: Ligat ha'Al",
+  "Cyprus: First Division",
+  "USA: MLS",
+  "Brazil: Serie A",
+  "Argentina: Liga Profesional",
+  "Mexico: Liga MX",
+  "Chile: Primera División",
+  "Uruguay: Primera División",
+  "Colombia: Liga BetPlay",
+  "Ecuador: Serie A",
+  "Peru: Liga 1",
+  "Paraguay: Primera División",
+  "Japan: J1 League",
+  "South Korea: K League 1",
+  "China: Super League",
+  "Saudi Arabia: Pro League",
+  "UAE: Pro League",
+  "Qatar: Stars League",
+  "Australia: A-League"
+];
 ];
 
 // Элементы DOM
@@ -114,8 +158,8 @@ async function apiFetch(path, params = {}) {
 // --- Core check logic ---
 // 1) Получаем все live fixtures с HT (statusShort === "HT").
 // 2) Фильтруем те, у которых счёт 2-0 или 0-2.
-// 3) Для каждого такого матча запрашиваем последние 7 матчей каждой команды,
-//    считаем средний голов за 7 матчей (если мало матчей — по тому, что есть).
+// 3) Для каждого такого матча запрашиваем последние 5 матчей каждой команды,
+//    считаем средний голов за 5 матчей (если мало матчей — по тому, что есть).
 // 4) Выводим все данные на страницу: лига, команды, счет HT, avgGoalsHome, avgGoalsAway, projectedTotal,
 //    отметка Under 3.5 / Under 4.0.
 // 5) Если найден хотя бы один — тройной сигнал и сохранение в статистику.
@@ -145,7 +189,7 @@ async function checkMatchesReal() {
       return;
     }
 
-    // Для каждого матча получаем дополнительные данные: последние 7 матчей каждой команды
+    // Для каждого матча получаем дополнительные данные: последние 5 матчей каждой команды
     const detailed = [];
     for (const f of matchesHT) {
       const fixtureId = f.fixture && f.fixture.id;
@@ -156,11 +200,11 @@ async function checkMatchesReal() {
       const home = teams.home;
       const away = teams.away;
 
-      // helper to fetch last 7 fixtures for team
+      // helper to fetch last 5 fixtures for team
       async function getLastMatchesGoals(teamId) {
         try {
-          // last=7
-          const resp = await apiFetch("fixtures", { team: teamId, last: 7 });
+          // last=5
+          const resp = await apiFetch("fixtures", { team: teamId, last: 5 });
           const arr = resp.response || [];
           // compute goals FOR this team in each match
           const goalsFor = arr
@@ -221,7 +265,7 @@ async function checkMatchesReal() {
         </div>
         <div class="match-meta">
           Счёт в перерыве: <strong>${d.scoreHome} : ${d.scoreAway}</strong> |
-          Средний голов (посл.7): ${d.homeAvgLast7} / ${d.awayAvgLast7} |
+          Средний голов (посл.5): ${d.homeAvgLast5} / ${d.awayAvgLast5} |
           Проектируемый тотал: <strong>${d.projectedTotal}</strong>
         </div>
         <div class="small">
