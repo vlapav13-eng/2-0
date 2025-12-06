@@ -1,51 +1,12 @@
 const API_KEY = "403e0d7c0f2f236034cf0475570195be";
+
+/* === 46 ЛУЧШИХ МУЖСКИХ ЛИГ (ID) === */
 export const LEAGUES = [
-  "England: Premier League",
-  "Spain: La Liga",
-  "Germany: Bundesliga",
-  "Italy: Serie A",
-  "France: Ligue 1",
-  "Portugal: Primeira Liga",
-  "Netherlands: Eredivisie",
-  "Belgium: Jupiler Pro League",
-  "Turkey: Super Lig",
-  "Greece: Super League",
-  "Austria: Bundesliga",
-  "Switzerland: Super League",
-  "Denmark: Superliga",
-  "Norway: Eliteserien",
-  "Sweden: Allsvenskan",
-  "Poland: Ekstraklasa",
-  "Czech Republic: First League",
-  "Croatia: HNL",
-  "Serbia: SuperLiga",
-  "Ukraine: Premier League",
-  "Russia: Premier League",
-  "Scotland: Premiership",
-  "Hungary: NB I",
-  "Romania: Liga I",
-  "Slovakia: Super Liga",
-  "Slovenia: PrvaLiga",
-  "Bulgaria: First League",
-  "Israel: Ligat ha'Al",
-  "Cyprus: First Division",
-  "USA: MLS",
-  "Brazil: Serie A",
-  "Argentina: Liga Profesional",
-  "Mexico: Liga MX",
-  "Chile: Primera División",
-  "Uruguay: Primera División",
-  "Colombia: Liga BetPlay",
-  "Ecuador: Serie A",
-  "Peru: Liga 1",
-  "Paraguay: Primera División",
-  "Japan: J1 League",
-  "South Korea: K League 1",
-  "China: Super League",
-  "Saudi Arabia: Pro League",
-  "UAE: Pro League",
-  "Qatar: Stars League",
-  "Australia: A-League"
+  39, 140, 78, 135, 61, 94, 88, 144, 203, 197,
+  218, 207, 176, 103, 113, 106, 317, 352, 331, 332,
+  235, 179, 205, 283, 337, 340, 157, 267, 203, 253,
+  71, 128, 262, 265, 276, 239, 275, 281, 287, 98,
+  292, 169, 307, 341, 312, 195
 ];
 
 let timerInterval = null;
@@ -59,9 +20,9 @@ const searchCountEl = document.getElementById("searchCount");
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 
-// === Загружаем счётчик с даты ===
 loadSearchCounter();
 
+/* ==== КНОПКИ ==== */
 startBtn.onclick = () => {
     if (!isRunning) {
         startSearch();
@@ -74,10 +35,10 @@ stopBtn.onclick = () => {
     startBtn.classList.remove("active");
 };
 
+/* ==== СЧЁТЧИК ПОИСКОВ ==== */
 function loadSearchCounter() {
     const saved = localStorage.getItem("searchCounter");
     const day = localStorage.getItem("searchDay");
-
     const today = new Date().toDateString();
 
     if (day !== today) {
@@ -98,6 +59,7 @@ function incrementSearchCounter() {
     searchCountEl.textContent = searchCountToday;
 }
 
+/* ==== СТАРТ / СТОП ==== */
 function startSearch() {
     isRunning = true;
     statusEl.textContent = "запущено…";
@@ -114,8 +76,9 @@ function stopSearch() {
     statusEl.className = "red";
 }
 
+/* ==== ТАЙМЕР ==== */
 function runTimer() {
-    nextCheckTime = 12 * 60;
+    nextCheckTime = 12 * 60; // 12 минут
 
     timerInterval = setInterval(() => {
         if (!isRunning) return;
@@ -130,6 +93,7 @@ function runTimer() {
     }, 1000);
 }
 
+/* ==== ГЛАВНАЯ ПРОВЕРКА ==== */
 async function runCheck() {
     incrementSearchCounter();
 
@@ -153,8 +117,10 @@ async function runCheck() {
             const ht = m.score.halftime.home;
             const at = m.score.halftime.away;
 
+            // строго 2-0 или 0-2
             if (!((ht === 2 && at === 0) || (ht === 0 && at === 2))) continue;
 
+            // средний показатель за 5 матчей
             const avg = await getAverageGoals(m.teams.home.id, m.teams.away.id);
             if (!avg) continue;
 
@@ -170,12 +136,14 @@ async function runCheck() {
         }
     }
 
+    /* ==== НЕТ СОВПАДЕНИЙ ==== */
     if (matchesFound.length === 0) {
         statusEl.textContent = "совпадений нет";
         statusEl.className = "red";
         return;
     }
 
+    /* ==== НАЙДЕНЫ МАТЧИ ==== */
     statusEl.textContent = "найдены матчи!";
     statusEl.className = "green";
 
@@ -192,8 +160,10 @@ async function runCheck() {
     });
 }
 
+/* ==== СРЕДНИЕ ГОЛЫ ЗА 5 МАТЧЕЙ ==== */
 async function getAverageGoals(homeId, awayId) {
     const url = `https://v3.football.api-sports.io/fixtures?last=5&team=`;
+
     const h = await fetch(url + homeId, { headers: { "x-rapidapi-key": API_KEY } });
     const a = await fetch(url + awayId, { headers: { "x-rapidapi-key": API_KEY } });
 
@@ -208,13 +178,10 @@ async function getAverageGoals(homeId, awayId) {
     return { home: hAvg, away: aAvg };
 }
 
+/* ==== ТРОЙНОЙ СИГНАЛ ==== */
 function playTripleBeep() {
     const audio = new Audio("beep.mp3");
     audio.play();
     setTimeout(() => audio.play(), 400);
     setTimeout(() => audio.play(), 800);
 }
-     
-        
-  
- 
