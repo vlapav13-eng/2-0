@@ -1,168 +1,186 @@
 const API_KEY = "403e0d7c0f2f236034cf0475570195be";
 
-let timerInterval = null;
-let scanInterval = null;
-let nextScan = 12 * 60;
-let running = false;
-
-// Лиги (без женских)
-const leagues = [
-    39, 40, 41, 42, 61, 78, 135, 140,
-    2, 3, 4, 5, 566, 556, 302
+const TOP_30_LEAGUES = [
+    39, 40, 61, 135, 78, 140, 94, 88, 203, 566, // Европа
+    71, 72, 73, // Бразилия
+    128, 129, // Аргентина
+    253, 254, // США MLS
+    302, 303, // Мексика
+    197, 198, // Турция
+    179, 180, // Греция
+    200, 201, // Дания
+    262, 263, // Китай
+    301, 304, // Япония
+    392, 393  // Корея
 ];
 
-document.getElementById("startBtn").onclick = () => startScanning();
-document.getElementById("stopBtn").onclick = () => stopScanning();
+let timerInterval = null;
+let nextCheckTime = 0;
+let isRunning = false;
+let searchCountToday = 0;
 
-function startScanning() {
-    if (running) return;
+const resultsDiv = document.getElementById("results");
+const statusEl = document.getElementById("status");
+const searchCountEl = document.getElementById("searchCount");
+const startBtn = document.getElementById("startBtn");
+const stopBtn = document.getElementById("stopBtn");
 
-    running = true;
-    document.getElementById("startBtn").classList.add("active");
-    document.getElementById("status").textContent = "Проверка включена…";
+// === Загружаем счётчик с даты ===
+loadSearchCounter();
 
-    runScan();
-    startTimer();
+startBtn.onclick = () => {
+    if (!isRunning) {
+        startSearch();
+        startBtn.classList.add("active");
+    }
+};
+
+stopBtn.onclick = () => {
+    stopSearch();
+    startBtn.classList.remove("active");
+};
+
+function loadSearchCounter() {
+    const saved = localStorage.getItem("searchCounter");
+    const day = localStorage.getItem("searchDay");
+
+    const today = new Date().toDateString();
+
+    if (day !== today) {
+        searchCountToday = 0;
+        localStorage.setItem("searchDay", today);
+        localStorage.setItem("searchCounter", 0);
+    } else {
+        searchCountToday = saved ? parseInt(saved) : 0;
+    }
+
+    searchCountEl.textContent = searchCountToday;
 }
 
-function stopScanning() {
-    running = false;
+function incrementSearchCounter() {
+    searchCountToday++;
+    localStorage.setItem("searchCounter", searchCountToday);
+    localStorage.setItem("searchDay", new Date().toDateString());
+    searchCountEl.textContent = searchCountToday;
+}
+
+function startSearch() {
+    isRunning = true;
+    statusEl.textContent = "запущено…";
+    statusEl.className = "green";
+
+    runCheck();
+    runTimer();
+}
+
+function stopSearch() {
+    isRunning = false;
     clearInterval(timerInterval);
-    clearInterval(scanInterval);
-
-    document.getElementById("startBtn").classList.remove("active");
-    document.getElementById("timer").textContent = "—:—";
-    document.getElementById("status").textContent = "Остановлено";
+    statusEl.textContent = "остановлено";
+    statusEl.className = "red";
 }
 
-function startTimer() {
-    nextScan = 12 * 60;
+function runTimer() {
+    nextCheckTime = 12 * 60;
 
     timerInterval = setInterval(() => {
-        if (!running) return;
+        if (!isRunning) return;
 
-        let min = Math.floor(nextScan / 60);
-        let sec = nextScan % 60;
+        nextCheckTime--;
+        document.getElementById("timer").textContent = `${nextCheckTime} сек`;
 
-        document.getElementById("timer").textContent =
-            `${min}:${sec < 10 ? "0" : ""}${sec}`;
-
-        nextScan--;
-
-        if (nextScan < 0) {
-            nextScan = 12 * 60;
-            runScan();
+        if (nextCheckTime <= 0) {
+            runCheck();
+            nextCheckTime = 12 * 60;
         }
     }, 1000);
 }
 
-async function runScan() {
-    if (!running) return;
+async function runCheck() {
+    incrementSearchCounter();
 
-    document.getElementById("status").textContent = "Идет поиск…";
+    resultsDiv.innerHTML = "";
+    statusEl.textContent = "проверка…";
+    statusEl.className = "yellow";
 
     let matchesFound = [];
 
-    for (let league of leagues) {
-        const live = await fetch(
-            `https://v3.football.api-sports.io/fixtures?live=all&league=${league}`,
-            { headers: { "x-apisports-key": API_KEY } }
-        );
-        const json = await live.json();
+    for (let league of TOP_30_LEAGUES) {
+        const url = `https://v3.football.api-sports.io/fixtures?league=${league}&live=all`;
+        const response = await fetch(url, {
+            headers: { "x-rapidapi-key": API_KEY }
+        });
 
-        const games = json.response;
+        const data = await response.json();
 
-        for (let g of games) {
-            const ht = g.score.halftime;
+        for (let m of data.response) {
+            if (!m.score.halftime) continue;
 
-            if (ht.home === 2 && ht.away === 0 || ht.home === 0 && ht.away === 2) {
+            const ht = m.score.halftime.home;
+            const at = m.score.halftime.away;
 
-                let odds = await getTotals(g.fixture.id);
+            if (!((ht === 2 && at === 0) || (ht === 0 && at === 2))) continue;
 
+            const avg = await getAverageGoals(m.teams.home.id, m.teams.away.id);
+            if (!avg) continue;
+
+            if (avg.home <= 1.5 && avg.away <= 1.5) {
                 matchesFound.push({
-                    league: g.league.name,
-                    home: g.teams.home.name,
-                    away: g.teams.away.name,
-                    ht: `${ht.home}-${ht.away}`,
-                    odd35: odds.o35,
-                    odd40: odds.o40
+                    league: m.league.name,
+                    home: m.teams.home.name,
+                    away: m.teams.away.name,
+                    avgHome: avg.home,
+                    avgAway: avg.away
                 });
             }
         }
     }
 
-    showMatches(matchesFound);
-}
-
-async function getTotals(fixtureId) {
-    try {
-        const res = await fetch(
-            `https://v3.football.api-sports.io/odds?fixture=${fixtureId}`,
-            { headers: { "x-apisports-key": API_KEY } }
-        );
-
-        const json = await res.json();
-        if (!json.response.length) return { o35: "—", o40: "—" };
-
-        const bookmakers = json.response[0].bookmakers;
-        if (!bookmakers.length) return { o35: "—", o40: "—" };
-
-        let odd35 = "—";
-        let odd40 = "—";
-
-        for (let book of bookmakers) {
-            for (let bet of book.bets) {
-                if (bet.name === "Totals") {
-                    for (let v of bet.values) {
-                        if (v.value === "3.5") odd35 = v.odd;
-                        if (v.value === "4.0") odd40 = v.odd;
-                    }
-                }
-            }
-        }
-
-        return { o35: odd35, o40: odd40 };
-
-    } catch {
-        return { o35: "—", o40: "—" };
-    }
-}
-
-function showMatches(arr) {
-    const box = document.getElementById("matches");
-    box.innerHTML = "";
-
-    if (arr.length === 0) {
-        document.getElementById("status").textContent = "Совпадений нет";
-        document.getElementById("status").className = "status red";
+    if (matchesFound.length === 0) {
+        statusEl.textContent = "совпадений нет";
+        statusEl.className = "red";
         return;
     }
 
-    document.getElementById("status").textContent = "Матчи найдены!";
-    document.getElementById("status").className = "status green";
+    statusEl.textContent = "найдены матчи!";
+    statusEl.className = "green";
 
     playTripleBeep();
 
-    arr.forEach(m => {
-        box.innerHTML += `
-            <div class="match-card">
-                <b>${m.home} — ${m.away}</b><br>
-                Лига: ${m.league}<br>
-                HT: ${m.ht}<br>
-                ТМ 3.5: <b>${m.odd35}</b><br>
-                ТМ 4.0: <b>${m.odd40}</b>
+    matchesFound.forEach(m => {
+        resultsDiv.innerHTML += `
+            <div class="match-box">
+                <b>${m.league}</b><br>
+                ${m.home} — ${m.away}<br>
+                Средний голов (5 игр): ${m.avgHome.toFixed(2)} / ${m.avgAway.toFixed(2)}
             </div>
         `;
     });
 }
 
-function playTripleBeep() {
-    const sound = new Audio("data:audio/wav;base64,UklGRrQAAABXQVZFZm10IBAAAAABAAEA..."); 
-    sound.play();
-    setTimeout(() => sound.play(), 400);
-    setTimeout(() => sound.play(), 800);
+async function getAverageGoals(homeId, awayId) {
+    const url = `https://v3.football.api-sports.io/fixtures?last=5&team=`;
+    const h = await fetch(url + homeId, { headers: { "x-rapidapi-key": API_KEY } });
+    const a = await fetch(url + awayId, { headers: { "x-rapidapi-key": API_KEY } });
+
+    const hd = await h.json();
+    const ad = await a.json();
+
+    if (!hd.response.length || !ad.response.length) return null;
+
+    const hAvg = hd.response.reduce((s, m) => s + m.goals.for, 0) / hd.response.length;
+    const aAvg = ad.response.reduce((s, m) => s + m.goals.for, 0) / ad.response.length;
+
+    return { home: hAvg, away: aAvg };
 }
 
-      
+function playTripleBeep() {
+    const audio = new Audio("beep.mp3");
+    audio.play();
+    setTimeout(() => audio.play(), 400);
+    setTimeout(() => audio.play(), 800);
+}
+     
+        
   
  
