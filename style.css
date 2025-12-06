@@ -2,70 +2,55 @@ body {
     background: #111;
     color: #fff;
     font-family: Arial, sans-serif;
+    padding: 20px;
     text-align: center;
 }
 
-.app {
-    max-width: 600px;
-    margin: 0 auto;
-    padding: 20px;
-}
-
 .btn {
-    background: #444;
-    color: #fff;
-    padding: 12px 22px;
-    margin: 5px;
+    padding: 12px 25px;
+    margin: 10px;
     font-size: 20px;
+    border-radius: 10px;
     border: none;
-    border-radius: 6px;
     cursor: pointer;
-}
-
-.btn.active {
-    background: #0f0;
-    color: #000;
+    background: #2e8b57;
+    color: white;
 }
 
 .btn.red {
-    background: #a00;
+    background: #b22222;
 }
 
-.status {
-    font-size: 20px;
+.btn.active {
+    background: #32cd32;
+    font-weight: bold;
+}
+
+.info-box {
+    background: #222;
+    padding: 15px;
     margin-top: 10px;
+    border-radius: 10px;
 }
 
-.status.red {
-    color: #ff3b3b;
+#status {
+    font-size: 22px;
+    font-weight: bold;
 }
 
-.status.green {
-    color: #4cff4c;
-}
+.green { color: #00ff7f; }
+.red { color: #ff5252; }
+.yellow { color: #ffd700; }
 
-.match-card {
-    border: 1px solid #444;
-    margin-top: 12px;
-    padding: 10px;
+.match-box {
+    background: #222;
+    padding: 12px;
+    margin: 10px auto;
+    border-left: 5px solid #2e8b57;
+    width: 95%;
+    border-radius: 10px;
     text-align: left;
-    background: #1b1b1b;
 }
-
-.timer {
-    margin-top: 15px;
-    font-size: 28px;
-}
-
-
- 
-  
-
-
-
-
-
-
   
 
 
