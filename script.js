@@ -9,7 +9,7 @@ let countdown = 12 * 60;
 let timerInterval = null;
 let checkIntervalId = null;
 
- const LEAGUES = [
+const LEAGUES = [
   "England: Premier League",
   "Spain: La Liga",
   "Germany: Bundesliga",
