@@ -139,7 +139,7 @@ async function runCheck() {
 
     let matchesFound = [];
 
-    for (let league of TOP_30_LEAGUES) {
+    for (let league of TOP_46_LEAGUES) {
         const url = `https://v3.football.api-sports.io/fixtures?league=${league}&live=all`;
         const response = await fetch(url, {
             headers: { "x-rapidapi-key": API_KEY }
@@ -158,7 +158,7 @@ async function runCheck() {
             const avg = await getAverageGoals(m.teams.home.id, m.teams.away.id);
             if (!avg) continue;
 
-            if (avg.home <= 1.5 && avg.away <= 1.5) {
+            if (avg.home <= 1.7 && avg.away <= 1.7) {
                 matchesFound.push({
                     league: m.league.name,
                     home: m.teams.home.name,
