@@ -1,17 +1,51 @@
 const API_KEY = "403e0d7c0f2f236034cf0475570195be";
-
-const TOP_30_LEAGUES = [
-    39, 40, 61, 135, 78, 140, 94, 88, 203, 566, // Европа
-    71, 72, 73, // Бразилия
-    128, 129, // Аргентина
-    253, 254, // США MLS
-    302, 303, // Мексика
-    197, 198, // Турция
-    179, 180, // Греция
-    200, 201, // Дания
-    262, 263, // Китай
-    301, 304, // Япония
-    392, 393  // Корея
+export const LEAGUES = [
+  "England: Premier League",
+  "Spain: La Liga",
+  "Germany: Bundesliga",
+  "Italy: Serie A",
+  "France: Ligue 1",
+  "Portugal: Primeira Liga",
+  "Netherlands: Eredivisie",
+  "Belgium: Jupiler Pro League",
+  "Turkey: Super Lig",
+  "Greece: Super League",
+  "Austria: Bundesliga",
+  "Switzerland: Super League",
+  "Denmark: Superliga",
+  "Norway: Eliteserien",
+  "Sweden: Allsvenskan",
+  "Poland: Ekstraklasa",
+  "Czech Republic: First League",
+  "Croatia: HNL",
+  "Serbia: SuperLiga",
+  "Ukraine: Premier League",
+  "Russia: Premier League",
+  "Scotland: Premiership",
+  "Hungary: NB I",
+  "Romania: Liga I",
+  "Slovakia: Super Liga",
+  "Slovenia: PrvaLiga",
+  "Bulgaria: First League",
+  "Israel: Ligat ha'Al",
+  "Cyprus: First Division",
+  "USA: MLS",
+  "Brazil: Serie A",
+  "Argentina: Liga Profesional",
+  "Mexico: Liga MX",
+  "Chile: Primera División",
+  "Uruguay: Primera División",
+  "Colombia: Liga BetPlay",
+  "Ecuador: Serie A",
+  "Peru: Liga 1",
+  "Paraguay: Primera División",
+  "Japan: J1 League",
+  "South Korea: K League 1",
+  "China: Super League",
+  "Saudi Arabia: Pro League",
+  "UAE: Pro League",
+  "Qatar: Stars League",
+  "Australia: A-League"
 ];
 
 let timerInterval = null;
