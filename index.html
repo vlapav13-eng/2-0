@@ -2,31 +2,31 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Поиск матчей HT 2-0 / 0-2</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Поиск матчей (HT 2-0 / 0-2)</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <h1>Поиск матчей (HT 2-0 / 0-2)</h1>
 
-<div class="app">
-    <h2>Поиск матчей (HT 2-0 / 0-2)</h2>
+    <div class="controls">
+        <button id="startBtn" class="btn">ПУСК</button>
+        <button id="stopBtn" class="btn red">СТОП</button>
+    </div>
 
-    <button id="startBtn" class="btn">ПУСК</button>
-    <button id="stopBtn" class="btn red">СТОП</button>
+    <div class="info-box">
+        <p><b>Критерии:</b> счёт в перерыве строго 2-0 или 0-2; средний голов ≤ 1.5 (последние 5 матчей); топ-30 лиг; интервал проверок 12 мин.</p>
+        <p><b>Обратный отсчёт:</b> <span id="timer">—</span></p>
+        <p><b>Поисков сегодня:</b> <span id="searchCount">0</span></p>
+    </div>
 
-    <div id="timer" class="timer">—:—</div>
+    <h2>Статус: <span id="status" class="yellow">ожидание…</span></h2>
 
-    <h3>Статус:</h3>
-    <div id="status" class="status">Ожидание…</div>
+    <div id="results"></div>
 
-    <h3>Найденные матчи:</h3>
-    <div id="matches"></div>
-</div>
-
-<script src="app.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>
-
-   
  
 
     
