@@ -1,14 +1,17 @@
 const API_KEY = "403e0d7c0f2f236034cf0475570195be";
 
-/* === 44 ЛУЧШИХ МУЖСКИХ ЛИГ (ID) === */
-const LEAGUES = [
-  39, 140, 78, 135, 61, 94, 88, 144, 203, 197,
-  218, 207, 176, 113, 106, 317, 352, 331, 332, 235,
-  179, 205, 283, 337, 340, 157, 267, 253, 71, 128,
-  262, 265, 276, 239, 275, 281, 287, 98, 292, 169,
-  307, 341, 312, 195
-];
-  
+const TOP_30_LEAGUES = [
+    39, 40, 61, 135, 78, 140, 94, 88, 203, 566, // Европа
+    71, 72, 73, // Бразилия
+    128, 129, // Аргентина
+    253, 254, // США MLS
+    302, 303, // Мексика
+    197, 198, // Турция
+    179, 180, // Греция
+    200, 201, // Дания
+    262, 263, // Китай
+    301, 304, // Япония
+    392, 393  // Корея
 ];
 
 let timerInterval = null;
@@ -22,9 +25,9 @@ const searchCountEl = document.getElementById("searchCount");
 const startBtn = document.getElementById("startBtn");
 const stopBtn = document.getElementById("stopBtn");
 
+// === Загружаем счётчик с даты ===
 loadSearchCounter();
 
-/* ==== КНОПКИ ==== */
 startBtn.onclick = () => {
     if (!isRunning) {
         startSearch();
@@ -37,10 +40,10 @@ stopBtn.onclick = () => {
     startBtn.classList.remove("active");
 };
 
-/* ==== СЧЁТЧИК ПОИСКОВ ==== */
 function loadSearchCounter() {
     const saved = localStorage.getItem("searchCounter");
     const day = localStorage.getItem("searchDay");
+
     const today = new Date().toDateString();
 
     if (day !== today) {
@@ -61,7 +64,6 @@ function incrementSearchCounter() {
     searchCountEl.textContent = searchCountToday;
 }
 
-/* ==== СТАРТ / СТОП ==== */
 function startSearch() {
     isRunning = true;
     statusEl.textContent = "запущено…";
@@ -78,9 +80,8 @@ function stopSearch() {
     statusEl.className = "red";
 }
 
-/* ==== ТАЙМЕР ==== */
 function runTimer() {
-    nextCheckTime = 12 * 60; // 12 минут
+    nextCheckTime = 12 * 60;
 
     timerInterval = setInterval(() => {
         if (!isRunning) return;
@@ -95,7 +96,6 @@ function runTimer() {
     }, 1000);
 }
 
-/* ==== ГЛАВНАЯ ПРОВЕРКА ==== */
 async function runCheck() {
     incrementSearchCounter();
 
@@ -105,7 +105,7 @@ async function runCheck() {
 
     let matchesFound = [];
 
-    for (let league of LEAGUES) {
+    for (let league of TOP_30_LEAGUES) {
         const url = `https://v3.football.api-sports.io/fixtures?league=${league}&live=all`;
         const response = await fetch(url, {
             headers: { "x-rapidapi-key": API_KEY }
@@ -119,14 +119,12 @@ async function runCheck() {
             const ht = m.score.halftime.home;
             const at = m.score.halftime.away;
 
-            // строго 2-0 или 0-2
             if (!((ht === 2 && at === 0) || (ht === 0 && at === 2))) continue;
 
-            // средний показатель за 5 матчей
             const avg = await getAverageGoals(m.teams.home.id, m.teams.away.id);
             if (!avg) continue;
 
-            if (avg.home <= 1.7 && avg.away <= 1.7) {
+            if (avg.home <= 1.5 && avg.away <= 1.5) {
                 matchesFound.push({
                     league: m.league.name,
                     home: m.teams.home.name,
@@ -138,14 +136,12 @@ async function runCheck() {
         }
     }
 
-    /* ==== НЕТ СОВПАДЕНИЙ ==== */
     if (matchesFound.length === 0) {
         statusEl.textContent = "совпадений нет";
         statusEl.className = "red";
         return;
     }
 
-    /* ==== НАЙДЕНЫ МАТЧИ ==== */
     statusEl.textContent = "найдены матчи!";
     statusEl.className = "green";
 
@@ -162,10 +158,8 @@ async function runCheck() {
     });
 }
 
-/* ==== СРЕДНИЕ ГОЛЫ ЗА 5 МАТЧЕЙ ==== */
 async function getAverageGoals(homeId, awayId) {
     const url = `https://v3.football.api-sports.io/fixtures?last=5&team=`;
-
     const h = await fetch(url + homeId, { headers: { "x-rapidapi-key": API_KEY } });
     const a = await fetch(url + awayId, { headers: { "x-rapidapi-key": API_KEY } });
 
@@ -180,7 +174,6 @@ async function getAverageGoals(homeId, awayId) {
     return { home: hAvg, away: aAvg };
 }
 
-/* ==== ТРОЙНОЙ СИГНАЛ ==== */
 function playTripleBeep() {
     const audio = new Audio("beep.mp3");
     audio.play();
