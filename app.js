@@ -1,8 +1,10 @@
-// app.js — исправленный с полной диагностикой
-const API_KEY = "a66f87d6c56c44bbf95cf72c9f8363e7";
+// app.js — версия без API-Sports, использует public ScoreBat (video-api) + сохраняет все твои критерии поиска
+// Условия поиска (как и было):
+// - HT (перерыв)
+// - счёт HT = 2-0 или 0-2
+// - исключаем матчи/лиги по ключевым словам (жен., юниоры, резерв, аматоры и т.д.) — тот же набор, что был у тебя
+// - дополнительно: проверяем средний голов у каждой команды по последним 5 матчам (avg <= 1.7)
 
-/* ==== Чёрный список ключевых слов (исключаем женские/юношеские/резервные/аматорские) ==== */
-// Сохранил те же ключевые слова, что и у тебя — но добавил корректное сопоставление (word-boundary, регэкспы)
 const EXCLUDE_KEYWORDS = [
   "women", "women's", "womens", "w-", "w.", "wsl", "ladies",
   "u23", "u22", "u21", "u20", "u19", "u18", "u17",
@@ -11,374 +13,351 @@ const EXCLUDE_KEYWORDS = [
   "3", "4", "5", "iii", "iv", "v", "3rd", "4th", "5th"
 ];
 
-// Предкомпилируем шаблоны исключений — каждое ключевое слово превращаем в регэксп с границами слова
-const EXCLUDE_REGEXES = EXCLUDE_KEYWORDS.map(k => {
-  const kw = String(k).trim();
-  // экранируем специальные символы
-  const esc = kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  // используем границы слова для большинства случаев — это уменьшит ложные срабатывания внутри чисел/строк
-  return { raw: kw, re: new RegExp("\\b" + esc + "\\b", "i") };
-});
+// Порог среднего голов (тот же)
+const MAX_AVG = 1.7;
 
-let timerInterval = null;
-let nextCheckTime = 0;
-let isRunning = false;
-let searchCountToday = 0;
-
-// --- DIAGNOSTICS ---
+// Диагностика (будет показана в UI)
 let diag = {
   lastRunAt: null,
-  totalFixturesFetched: 0,
+  leaguesFetched: 0,
+  fixturesFetched: 0,
   excludedByKeyword: 0,
-  maleCandidates: 0,
-  goalCandidates: 0,           // HT matches (all with any goals) before avg check
+  leagueCandidates: 0,
+  htCandidates: 0,
   missingAvgData: 0,
   rejectedByAvg: 0,
   passedByAvg: 0,
   foundMatches: 0,
-  samplesRejected: [],         // up to 20 sample objects {league, home, away, reason}
-  samplesPassed: []            // up to 20 sample objects
+  samplesRejected: [],
+  samplesPassed: []
 };
-const DIAG_MAX_SAMPLES = 20;
+const DIAG_MAX_SAMPLES = 25;
 
-// DOM элементы
-const resultsDiv = document.getElementById("results");
-const statusEl = document.getElementById("status");
-const searchCountEl = document.getElementById("searchCount");
-const startBtn = document.getElementById("startBtn");
-const stopBtn = document.getElementById("stopBtn");
+// DOM
+const resultsDiv = document.getElementById('results') || document.body;
+const statusEl = document.getElementById('status');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const searchCountEl = document.getElementById('searchCount');
+let timerInterval = null;
+let isRunning = false;
+let searchCountToday = 0;
 
-// init counter
-loadSearchCounter();
-
-// UI: кнопки
-startBtn && (startBtn.onclick = () => {
-  if (!isRunning) {
-    startSearch();
-    startBtn.classList.add("active");
-  }
-});
-stopBtn && (stopBtn.onclick = () => {
-  stopSearch();
-  startBtn && startBtn.classList.remove("active");
+// helper: build regexes for exclude keywords (word-boundaries)
+const EXCLUDE_REGEXES = EXCLUDE_KEYWORDS.map(k => {
+  const esc = String(k).replace(/[.*+?^${}()|[\]\]/g, '\$&');
+  return { raw: k, re: new RegExp('\b' + esc + '\b', 'i') };
 });
 
-// счётчик
-function loadSearchCounter() {
-  const saved = localStorage.getItem("searchCounter");
-  const day = localStorage.getItem("searchDay");
-  const today = new Date().toDateString();
-
-  if (day !== today) {
-    searchCountToday = 0;
-    localStorage.setItem("searchDay", today);
-    localStorage.setItem("searchCounter", "0");
-  } else {
-    searchCountToday = saved ? parseInt(saved, 10) : 0;
-  }
-
-  if (searchCountEl) searchCountEl.textContent = searchCountToday;
+function loadSearchCounter(){
+  try{
+    const saved = localStorage.getItem('searchCounter');
+    const day = localStorage.getItem('searchDay');
+    const today = new Date().toDateString();
+    if(day !== today){
+      searchCountToday = 0;
+      localStorage.setItem('searchDay', today);
+      localStorage.setItem('searchCounter', '0');
+    } else {
+      searchCountToday = saved ? parseInt(saved,10) : 0;
+    }
+    if(searchCountEl) searchCountEl.textContent = searchCountToday;
+  }catch(e){console.warn(e)}
 }
-function saveSearchCounter() {
-  localStorage.setItem("searchCounter", String(searchCountToday));
-  localStorage.setItem("searchDay", new Date().toDateString());
+function saveSearchCounter(){
+  localStorage.setItem('searchCounter', String(searchCountToday));
+  localStorage.setItem('searchDay', new Date().toDateString());
 }
-function incrementSearchCounter() {
+function incrementSearchCounter(){
   searchCountToday++;
   saveSearchCounter();
-  if (searchCountEl) searchCountEl.textContent = searchCountToday;
+  if(searchCountEl) searchCountEl.textContent = searchCountToday;
 }
 
-// status helper
-function setStatus(text, cls = "") {
-  if (!statusEl) return;
+function setStatus(text, cls=''){
+  if(!statusEl) return;
   statusEl.textContent = text;
-  statusEl.className = "";
-  if (cls) statusEl.classList.add(cls);
+  statusEl.className = '';
+  if(cls) statusEl.classList.add(cls);
 }
 
-// start/stop
-function startSearch() {
-  isRunning = true;
-  setStatus("запущено…", "green");
-  runCheck();
-  runTimer();
-}
-function stopSearch() {
-  isRunning = false;
-  clearInterval(timerInterval);
-  setStatus("остановлено", "red");
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]);
 }
 
-// timer
-function runTimer() {
-  nextCheckTime = 12 * 60; // секунды
-  if (document.getElementById("timer")) document.getElementById("timer").textContent = `${nextCheckTime} сек`;
-  timerInterval = setInterval(() => {
-    if (!isRunning) return;
-    nextCheckTime--;
-    if (document.getElementById("timer")) document.getElementById("timer").textContent = `${nextCheckTime} сек`;
-    if (nextCheckTime <= 0) {
-      runCheck();
-      nextCheckTime = 12 * 60;
-    }
-  }, 1000);
+function isLeagueExcluded(leagueName){
+  if(!leagueName) return { excluded: true, matched: '(no name)'};
+  const name = String(leagueName).toLowerCase();
+  for(const {raw,re} of EXCLUDE_REGEXES){
+    if(re.test(name)) return { excluded: true, matched: raw };
+  }
+  return { excluded:false, matched: null };
 }
 
-// очистка диагностики
-function resetDiagnostics() {
+// show diagnostics panel on screen
+function renderDiagnostics(){
   diag.lastRunAt = new Date().toISOString();
-  diag.totalFixturesFetched = 0;
-  diag.excludedByKeyword = 0;
-  diag.maleCandidates = 0;
-  diag.goalCandidates = 0;
-  diag.missingAvgData = 0;
-  diag.rejectedByAvg = 0;
-  diag.passedByAvg = 0;
-  diag.foundMatches = 0;
-  diag.samplesRejected = [];
-  diag.samplesPassed = [];
-}
-
-// рендер диагностики в top результатов
-function renderDiagnosticsPanel() {
-  if (!resultsDiv) return;
-  // создаём/обновляем панель в resultsDiv сверху
-  let panel = document.getElementById("diagPanel");
-  if (!panel) {
-    panel = document.createElement("div");
-    panel.id = "diagPanel";
-    panel.className = "diag-panel";
-    resultsDiv.prepend(panel);
+  let panel = document.getElementById('diagPanel');
+  if(!panel){
+    panel = document.createElement('div');
+    panel.id = 'diagPanel';
+    panel.style.border = '1px solid #ccc';
+    panel.style.padding = '8px';
+    panel.style.marginBottom = '8px';
+    if(resultsDiv.firstChild) resultsDiv.insertBefore(panel, resultsDiv.firstChild);
+    else resultsDiv.appendChild(panel);
   }
   panel.innerHTML = `
-    <div><strong>Диагностика (последний запуск):</strong> ${diag.lastRunAt || "-"}</div>
-    <div>Всего fixtures получено: ${diag.totalFixturesFetched}</div>
-    <div>Исключено по ключевым словам (жен./юниоры/резерв/низш. уровни): ${diag.excludedByKeyword}</div>
-    <div>Оставлено (мужские кандидаты): ${diag.maleCandidates}</div>
-    <div>HT матчи с нужным счётом (2-0 / 0-2): ${diag.goalCandidates}</div>
-    <div>Матчей с неполными данными для avg: ${diag.missingAvgData}</div>
-    <div>Отброшено по avg (&gt;1.7): ${diag.rejectedByAvg}</div>
-    <div>Прошли по avg (≤1.7 у обеих): ${diag.passedByAvg}</div>
-    <div>Найдено матчей (выведено): ${diag.foundMatches}</div>
-    <details>
-      <summary>Примеры отфильтрованных матчей (до ${DIAG_MAX_SAMPLES})</summary>
-      ${diag.samplesRejected.map(s => `<div class="diag-sample">[${escapeHtml(s.reason)}] ${escapeHtml(s.league)}: ${escapeHtml(s.home)} — ${escapeHtml(s.away)}</div>`).join("")}
-    </details>
-    <details>
-      <summary>Примеры найденных матчей (до ${DIAG_MAX_SAMPLES})</summary>
-      ${diag.samplesPassed.map(s => `<div class="diag-sample"> ${escapeHtml(s.league)}: ${escapeHtml(s.home)} — ${escapeHtml(s.away)} | avg ${s.avgHome}/${s.avgAway}</div>`).join("")}
-    </details>
+    <div><strong>Диагностика (последний запуск):</strong> ${diag.lastRunAt}</div>
+    <div>Лиг получено: ${diag.leaguesFetched}</div>
+    <div>Фикстур обработано: ${diag.fixturesFetched}</div>
+    <div>Исключено по ключевым словам: ${diag.excludedByKeyword}</div>
+    <div>Оставлено лиг для анализа: ${diag.leagueCandidates}</div>
+    <div>Найдено HT кандидатов: ${diag.htCandidates}</div>
+    <div>Матчей без данных avg: ${diag.missingAvgData}</div>
+    <div>Отброшено по avg (&gt;${MAX_AVG}): ${diag.rejectedByAvg}</div>
+    <div>Прошли по avg (≤${MAX_AVG}): ${diag.passedByAvg}</div>
+    <div>Найдено матчей: ${diag.foundMatches}</div>
+    <details><summary>Примеры отклонённых</summary>${diag.samplesRejected.map(s=>`<div>${escapeHtml(s.reason)} | ${escapeHtml(s.league||'')}: ${escapeHtml(s.home||'')} - ${escapeHtml(s.away||'')}</div>`).join('')}</details>
+    <details><summary>Примеры пройденных</summary>${diag.samplesPassed.map(s=>`<div>${escapeHtml(s.league||'')}: ${escapeHtml(s.home||'')} - ${escapeHtml(s.away||'')} | avg ${s.avgHome}/${s.avgAway}</div>`).join('')}</details>
     <hr>
   `;
 }
 
-// helper: проверяет, нужно ли исключить лигу. Возвращает { excluded: bool, matched: string|null }
-function isLeagueExcluded(rawLeagueName) {
-  if (!rawLeagueName) return { excluded: true, matched: "(no name)" };
-  const name = String(rawLeagueName).toLowerCase();
-  for (const { raw, re } of EXCLUDE_REGEXES) {
-    if (re.test(name)) return { excluded: true, matched: raw };
+// Extract goals from a fixture object with robustness for several field names
+function extractHalftimeScores(match){
+  // try common fields
+  const candidates = [];
+  if(match.home_ht_score !== undefined && match.away_ht_score !== undefined){
+    candidates.push({type:'home_ht_score/away_ht_score', h:match.home_ht_score, a:match.away_ht_score});
   }
-  return { excluded: false, matched: null };
+  if(match.ht_score){ // e.g. "2-0"
+    const parts = String(match.ht_score).split(/[^0-9]+/).filter(Boolean).map(Number);
+    if(parts.length>=2) candidates.push({type:'ht_score', h:parts[0], a:parts[1]});
+  }
+  if(match.score && match.score.halftime){
+    const h = match.score.halftime.home; const a = match.score.halftime.away;
+    if(typeof h === 'number' && typeof a === 'number') candidates.push({type:'score.halftime', h, a});
+  }
+  // Scorebat sometimes uses "home_score"/"away_score" as full time, but halftime maybe missing
+  if(match.home_score !== undefined && match.away_score !== undefined && match.time && /half|ht/i.test(String(match.time))){
+    candidates.push({type:'home_score/away_score (time indicates HT)', h:match.home_score, a:match.away_score});
+  }
+  // fallback: fields like goals.home/goals.away
+  if(match.goals && (match.goals.home !== undefined || match.goals.away !== undefined)){
+    const h = match.goals.home; const a = match.goals.away;
+    if(typeof h === 'number' && typeof a === 'number') candidates.push({type:'goals', h, a});
+  }
+  // return first valid candidate
+  for(const c of candidates){
+    if(typeof c.h === 'number' && typeof c.a === 'number') return {h:c.h, a:c.a, field:c.type};
+  }
+  return null;
 }
 
-// main check with detailed diagnostics
-async function runCheck() {
-  try {
+// get average goals for a team using fixtures list (last 5 matches involving that team)
+function computeAverageForTeam(teamName, fixtures){
+  if(!teamName || !Array.isArray(fixtures)) return null;
+  // collect matches where team played
+  const teamMatches = fixtures.filter(m => {
+    const home = (m.home_team || m.home || m.teams?.home?.name || '').toString().toLowerCase();
+    const away = (m.away_team || m.away || m.teams?.away?.name || '').toString().toLowerCase();
+    return home === teamName.toLowerCase() || away === teamName.toLowerCase();
+  });
+  if(teamMatches.length === 0) return null;
+  // sort by date if present
+  teamMatches.sort((a,b)=>{
+    const da = new Date(a.date || a.match_date || a.utc_date || 0).getTime()||0;
+    const db = new Date(b.date || b.match_date || b.utc_date || 0).getTime()||0;
+    return db - da; // descending (latest first)
+  });
+  const last5 = teamMatches.slice(0,5);
+  const goals = [];
+  for(const m of last5){
+    // extract full-time goals if possible
+    const homeScore = (m.home_score !== undefined) ? Number(m.home_score) : (m.fulltime_home !== undefined ? Number(m.fulltime_home) : (m.goals?.home !== undefined ? Number(m.goals.home) : null));
+    const awayScore = (m.away_score !== undefined) ? Number(m.away_score) : (m.fulltime_away !== undefined ? Number(m.fulltime_away) : (m.goals?.away !== undefined ? Number(m.goals.away) : null));
+
+    // determine which side is the team
+    const homeName = (m.home_team || m.home || m.teams?.home?.name || '').toString();
+    const awayName = (m.away_team || m.away || m.teams?.away?.name || '').toString();
+    let teamGoals = null;
+    if(homeName.toLowerCase() === teamName.toLowerCase()) teamGoals = (typeof homeScore === 'number' && !isNaN(homeScore)) ? homeScore : null;
+    if(awayName.toLowerCase() === teamName.toLowerCase()) teamGoals = (typeof awayScore === 'number' && !isNaN(awayScore)) ? awayScore : teamGoals;
+
+    if(teamGoals === null) continue; // skip if can't determine
+    goals.push(teamGoals);
+  }
+  if(goals.length === 0) return null;
+  const avg = goals.reduce((s,v)=>s+v,0) / goals.length;
+  return +avg.toFixed(2);
+}
+
+// fetch JSON helper with timeout
+async function fetchJson(url, opts={}){
+  try{
+    const controller = new AbortController();
+    const id = setTimeout(()=>controller.abort(), 15000);
+    const res = await fetch(url, {...opts, signal: controller.signal});
+    clearTimeout(id);
+    if(!res.ok) return { ok:false, status: res.status, body: null };
+    const j = await res.json().catch(()=>null);
+    return { ok:true, status: res.status, body: j };
+  }catch(e){
+    return { ok:false, status: 'error', body: null, error: String(e) };
+  }
+}
+
+// MAIN: scan ScoreBat API
+async function runScan(){
+  try{
     incrementSearchCounter();
-    resetDiagnostics();
+    // reset diag
+    diag = { lastRunAt: null, leaguesFetched:0, fixturesFetched:0, excludedByKeyword:0, leagueCandidates:0, htCandidates:0, missingAvgData:0, rejectedByAvg:0, passedByAvg:0, foundMatches:0, samplesRejected:[], samplesPassed:[] };
+    if(resultsDiv) resultsDiv.innerHTML = '';
+    setStatus('проверка…', 'yellow');
 
-    // clear results (we keep diagnostics panel at top, so clear all and then renderPanel)
-    if (resultsDiv) resultsDiv.innerHTML = "";
-    setStatus("проверка…", "yellow");
-
-    // 1) fetch all fixtures with status=HT
-    const fixturesUrl = `https://v3.football.api-sports.io/fixtures?status=HT`;
-    console.debug("Fetching fixtures from:", fixturesUrl);
-    const resp = await fetch(fixturesUrl, {
-      headers: { "x-apisports-key": API_KEY }
-    });
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => "");
-      throw new Error(`Ошибка API fixtures: ${resp.status} ${text}`);
-    }
-    const json = await resp.json();
-    const all = Array.isArray(json.response) ? json.response : [];
-    diag.totalFixturesFetched = all.length;
-    console.debug(`Fixtures fetched: ${all.length}`);
-
-    // 2) filter by keyword to exclude women/u*/reserve/academy/3-5/regionals/amateur
-    const maleCandidates = [];
-    let excludedCount = 0;
-    for (const f of all) {
-      const leagueNameRaw = (f.league && (f.league.name || ""));
-      const leagueName = (leagueNameRaw || "").toString();
-      const check = isLeagueExcluded(leagueName);
-      if (check.excluded) {
-        excludedCount++;
-        if (diag.samplesRejected.length < DIAG_MAX_SAMPLES) {
-          diag.samplesRejected.push({ league: leagueName || "(no name)", home: f.teams?.home?.name || "", away: f.teams?.away?.name || "", reason: `ключ '${check.matched}'` });
-        }
-        continue;
-      }
-      maleCandidates.push(f);
-    }
-    diag.excludedByKeyword = excludedCount;
-    diag.maleCandidates = maleCandidates.length;
-
-    // 3) filter maleCandidates by score 2-0 / 0-2
-    const goalCandidates = maleCandidates.filter(f => {
-      const goals = f.goals || {};
-      if (typeof goals.home !== "number" || typeof goals.away !== "number") return false;
-      return (goals.home === 2 && goals.away === 0) || (goals.home === 0 && goals.away === 2);
-    });
-    diag.goalCandidates = goalCandidates.length;
-
-    console.debug(`After keyword filter: ${maleCandidates.length}, goalCandidates: ${goalCandidates.length}`);
-
-    if (goalCandidates.length === 0) {
-      // render diagnostics and exit
-      renderDiagnosticsPanel();
-      setStatus("совпадений нет", "red");
-      if (resultsDiv) resultsDiv.innerHTML += `<div class="small">Подходящих HT матчей (2-0 / 0-2) не найдено.</div>`;
+    // 1) fetch leagues
+    const leaguesUrl = 'https://www.scorebat.com/video-api/v3/leagues/';
+    const L = await fetchJson(leaguesUrl);
+    if(!L.ok || !L.body){
+      if(resultsDiv) resultsDiv.innerHTML = `<div class="small">Ошибка получения списка лиг: ${L.status}</div>`;
+      setStatus('ошибка API лиг', 'red');
       return;
     }
+    const leagues = Array.isArray(L.body.response) ? L.body.response : (L.body.response || []);
+    diag.leaguesFetched = leagues.length || 0;
 
-    // 4) for each goalCandidate compute avg and apply avg filter; collect diagnostics
+    // We'll process leagues sequentially (to avoid rate issues), but keep it limited
+    const leagueCandidates = [];
+    for(const lg of leagues){
+      const leagueName = lg.name || lg.title || '';
+      const control = isLeagueExcluded(leagueName);
+      if(control.excluded){
+        diag.excludedByKeyword++;
+        if(diag.samplesRejected.length < DIAG_MAX_SAMPLES) diag.samplesRejected.push({ league: leagueName, home:'', away:'', reason: `ключ '${control.matched}'` });
+        continue;
+      }
+      leagueCandidates.push(lg);
+    }
+    diag.leagueCandidates = leagueCandidates.length;
+
+    // 2) For each league, fetch fixtures for that group
     const found = [];
-    for (const f of goalCandidates) {
-      const homeId = f.teams?.home?.id;
-      const awayId = f.teams?.away?.id;
-      const leagueName = f.league?.name || "League";
-      const homeName = f.teams?.home?.name || "Home";
-      const awayName = f.teams?.away?.name || "Away";
-
-      if (!homeId || !awayId) {
-        diag.missingAvgData++;
-        if (diag.samplesRejected.length < DIAG_MAX_SAMPLES) diag.samplesRejected.push({ league: leagueName, home: homeName, away: awayName, reason: "нет id команды" });
+    for(const lg of leagueCandidates){
+      // ScoreBat fixtures endpoint grouped by group/league unique id
+      const groupId = lg.unique_id || lg.id || lg.group || lg.name;
+      const fixturesUrl = `https://www.scorebat.com/video-api/v3/fixtures/?group=${encodeURIComponent(groupId)}`;
+      const F = await fetchJson(fixturesUrl);
+      if(!F.ok || !F.body){
+        // push example and continue
+        if(diag.samplesRejected.length < DIAG_MAX_SAMPLES) diag.samplesRejected.push({ league: lg.name || groupId, home:'', away:'', reason: `fixtures fetch error ${F.status}` });
         continue;
       }
+      // ScoreBat may put matches under response.matches or response
+      const fixtures = (Array.isArray(F.body.response?.matches) ? F.body.response.matches : (Array.isArray(F.body.response) ? F.body.response : (F.body.matches || [])));
+      diag.fixturesFetched += fixtures.length;
 
-      const avg = await getAverageGoals(homeId, awayId);
-      if (!avg) {
-        diag.missingAvgData++;
-        if (diag.samplesRejected.length < DIAG_MAX_SAMPLES) diag.samplesRejected.push({ league: leagueName, home: homeName, away: awayName, reason: "нет данных avg" });
-        continue;
+      // go through fixtures to find HT 2-0 / 0-2
+      for(const m of fixtures){
+        // detect HT scores
+        const ht = extractHalftimeScores(m);
+        if(!ht) continue;
+        // ensure it's HT: sometimes API might include full-time only; field choice above uses ht fields usually
+        const isHT = true; // we consider it HT if we extracted halftime scores via known fields
+        if(!isHT) continue;
+        if(!((ht.h === 2 && ht.a === 0) || (ht.h === 0 && ht.a === 2))) continue;
+
+        diag.htCandidates++;
+
+        // determine home and away names (robust)
+        const homeName = (m.home_team || m.home || m.teams?.home?.name || m.sideA || '').toString();
+        const awayName = (m.away_team || m.away || m.teams?.away?.name || m.sideB || '').toString();
+
+        // compute averages for each team using fixtures list of this league (or entire fixtures array)
+        // We'll use the fixtures array of this league as historical data source
+        const avgHome = computeAverageForTeam(homeName, fixtures);
+        const avgAway = computeAverageForTeam(awayName, fixtures);
+
+        if(avgHome === null || avgAway === null){
+          diag.missingAvgData++;
+          if(diag.samplesRejected.length < DIAG_MAX_SAMPLES) diag.samplesRejected.push({ league: lg.name||groupId, home:homeName, away:awayName, reason:'нет данных avg' });
+          continue;
+        }
+
+        // check thresholds — same as раньше
+        if(avgHome <= MAX_AVG && avgAway <= MAX_AVG){
+          diag.passedByAvg++;
+          found.push({ league: lg.name||groupId, home: homeName, away: awayName, avgHome, avgAway, ht: `${ht.h}-${ht.a}` });
+          if(diag.samplesPassed.length < DIAG_MAX_SAMPLES) diag.samplesPassed.push({ league: lg.name||groupId, home: homeName, away: awayName, avgHome, avgAway });
+        } else {
+          diag.rejectedByAvg++;
+          if(diag.samplesRejected.length < DIAG_MAX_SAMPLES) diag.samplesRejected.push({ league: lg.name||groupId, home:homeName, away:awayName, reason: `avg home ${avgHome}, away ${avgAway}` });
+        }
       }
 
-      // avg exists, check thresholds
-      if (avg.home <= 1.7 && avg.away <= 1.7) {
-        diag.passedByAvg++;
-        found.push({ league: leagueName, home: homeName, away: awayName, avgHome: avg.home, avgAway: avg.away, ht: `${f.goals.home}-${f.goals.away}` });
-        if (diag.samplesPassed.length < DIAG_MAX_SAMPLES) diag.samplesPassed.push({ league: leagueName, home: homeName, away: awayName, avgHome: avg.home, avgAway: avg.away });
-      } else {
-        diag.rejectedByAvg++;
-        const reasonParts = [];
-        if (avg.home > 1.7) reasonParts.push(`home avg ${avg.home}`);
-        if (avg.away > 1.7) reasonParts.push(`away avg ${avg.away}`);
-        const reason = reasonParts.join("; ");
-        if (diag.samplesRejected.length < DIAG_MAX_SAMPLES) diag.samplesRejected.push({ league: leagueName, home: homeName, away: awayName, reason: reason });
-      }
+      // small delay to be polite
+      await new Promise(r=>setTimeout(r, 300));
     }
 
     diag.foundMatches = found.length;
+    renderDiagnostics();
 
-    // render diagnostics panel
-    renderDiagnosticsPanel();
-
-    if (found.length === 0) {
-      setStatus("совпадений нет", "red");
-      if (resultsDiv) resultsDiv.innerHTML += `<div class="small">Подходящих матчей после проверки avg не найдено.</div>`;
+    if(found.length === 0){
+      setStatus('совпадений нет', 'red');
+      if(resultsDiv) resultsDiv.innerHTML += `<div class="small">Подходящих матчей не найдено.</div>`;
       return;
     }
 
-    // show found matches
-    setStatus(`найдено матчей: ${found.length}`, "green");
+    setStatus(`найдено матчей: ${found.length}`, 'green');
     playTripleBeep();
-    for (const m of found) {
-      const block = document.createElement("div");
-      block.className = "match-box";
-      block.innerHTML = `<b>${escapeHtml(m.league)}</b><br>
-                         ${escapeHtml(m.home)} — ${escapeHtml(m.away)} | HT: ${m.ht}<br>
-                         Средний голов (5): ${m.avgHome.toFixed(2)} / ${m.avgAway.toFixed(2)}`;
-      resultsDiv && resultsDiv.appendChild(block);
+
+    for(const m of found){
+      const block = document.createElement('div');
+      block.className = 'match-box';
+      block.style.border = '1px solid #444';
+      block.style.padding = '6px';
+      block.style.margin = '6px 0';
+      block.innerHTML = `<b>${escapeHtml(m.league)}</b><br>${escapeHtml(m.home)} — ${escapeHtml(m.away)} | HT: ${m.ht}<br>Средний голов (5): ${m.avgHome.toFixed(2)} / ${m.avgAway.toFixed(2)}`;
+      resultsDiv.appendChild(block);
     }
 
-  } catch (err) {
-    console.error("runCheck error:", err);
-    setStatus("Ошибка при проверке (см. консоль)", "red");
-    if (resultsDiv) resultsDiv.innerHTML = `<div class="small">Ошибка при обращении к API — проверь ключ и доступность сервиса.</div>`;
+  }catch(e){
+    console.error(e);
+    setStatus('Ошибка при проверке (см. консоль)', 'red');
+    if(resultsDiv) resultsDiv.innerHTML = `<div class="small">Ошибка: ${escapeHtml(String(e))}</div>`;
   }
 }
 
-// getAverageGoals as before, adapted for diagnostics and made a bit more robust
-async function getAverageGoals(homeId, awayId) {
-  try {
-    const base = `https://v3.football.api-sports.io/fixtures?last=5&team=`;
-    console.debug(`Fetching last5 for teams ${homeId} and ${awayId}`);
-    const [rh, ra] = await Promise.all([
-      fetch(base + encodeURIComponent(homeId), { headers: { "x-apisports-key": API_KEY } }),
-      fetch(base + encodeURIComponent(awayId), { headers: { "x-apisports-key": API_KEY } })
-    ]);
-    if (!rh.ok || !ra.ok) {
-      console.warn("getAverageGoals: one of responses not ok", rh.status, ra.status);
-      return null;
-    }
-    const [hd, ad] = await Promise.all([rh.json(), ra.json()]);
-
-    const hResp = Array.isArray(hd.response) ? hd.response : [];
-    const aResp = Array.isArray(ad.response) ? ad.response : [];
-
-    const hArr = hResp.map(m => {
-      if (!m.goals) return null;
-      // определяем, была ли команда home в этом матче
-      const isHome = (m.teams?.home?.id == homeId);
-      if (isHome && typeof m.goals.home === 'number') return m.goals.home;
-      if (!isHome && typeof m.goals.away === 'number') return m.goals.away;
-      return null;
-    }).filter(v => typeof v === "number");
-
-    const aArr = aResp.map(m => {
-      if (!m.goals) return null;
-      const isHome = (m.teams?.home?.id == awayId);
-      if (isHome && typeof m.goals.home === 'number') return m.goals.home;
-      if (!isHome && typeof m.goals.away === 'number') return m.goals.away;
-      return null;
-    }).filter(v => typeof v === "number");
-
-    console.debug(`avg arrays lengths for ${homeId}/${awayId}:`, hArr.length, aArr.length);
-
-    if (hArr.length === 0 || aArr.length === 0) return null;
-    const hAvg = +(hArr.reduce((s, v) => s + v, 0) / hArr.length).toFixed(2);
-    const aAvg = +(aArr.reduce((s, v) => s + v, 0) / aArr.length).toFixed(2);
-    return { home: hAvg, away: aAvg };
-  } catch (e) {
-    console.warn("getAverageGoals error", e);
-    return null;
-  }
+function playTripleBeep(){
+  try{
+    const a = new Audio('beep.mp3');
+    a.play().catch(()=>{});
+    setTimeout(()=>{ a.currentTime=0; a.play().catch(()=>{}); }, 400);
+    setTimeout(()=>{ a.currentTime=0; a.play().catch(()=>{}); }, 800);
+  }catch(e){console.warn(e)}
 }
 
-// beep
-function playTripleBeep() {
-  try {
-    const audio = new Audio("beep.mp3");
-    audio.play().catch(()=>{});
-    setTimeout(()=>{ audio.currentTime = 0; audio.play().catch(()=>{}); }, 400);
-    setTimeout(()=>{ audio.currentTime = 0; audio.play().catch(()=>{}); }, 800);
-  } catch(e){ console.warn("beep error", e); }
+// start/stop UI binding
+startBtn && (startBtn.onclick = ()=>{ if(!isRunning){ isRunning=true; setStatus('запущено…','green'); runScan(); startTimer(); } });
+stopBtn && (stopBtn.onclick = ()=>{ isRunning=false; clearInterval(timerInterval); setStatus('остановлено','red'); });
+
+function startTimer(){
+  let next = 12*60; // seconds
+  const tEl = document.getElementById('timer');
+  if(tEl) tEl.textContent = `${next} сек`;
+  timerInterval = setInterval(()=>{
+    if(!isRunning) return;
+    next--;
+    if(tEl) tEl.textContent = `${next} сек`;
+    if(next<=0){ runScan(); next = 12*60; }
+  },1000);
 }
 
-// escape html
-function escapeHtml(str) {
-  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]);
-}
+// init counter
+loadSearchCounter();
 
-// --- Доп. отладочная команда (можно вызвать из консоли для быстрой проверки)
-window.__DEBUG_APP = {
-  EXCLUDE_KEYWORDS,
-  EXCLUDE_REGEXES,
-  isLeagueExcluded
-};
+// debug helper on window
+window.__SCOREBAT_DEBUG = { EXCLUDE_KEYWORDS, EXCLUDE_REGEXES, computeAverageForTeam, extractHalftimeScores };
 
-console.info('app.js (исправленный) загружен — доступны diagnostics и __DEBUG_APP в консоли.');
+console.info('app.js (ScoreBat) загружен — нажми Start. Диагностика появится вверху.');
