@@ -124,7 +124,7 @@ async function runCheck() {
             const avg = await getAverageGoals(m.teams.home.id, m.teams.away.id);
             if (!avg) continue;
 
-            if (avg.home <= 1.5 && avg.away <= 1.5) {
+            if (avg.home <= 1.7 && avg.away <= 1.7) {
                 matchesFound.push({
                     league: m.league.name,
                     home: m.teams.home.name,
