@@ -10,7 +10,7 @@ const API_SOURCES = [
 ];
 
 // Ключ API — "a66f87d6c56c44bbf95cf72c9f8363e7";
-const API_KEY = "YOUR_API_KEY_HERE";
+const API_KEY = "a66f87d6c56c44bbf95cf72c9f8363e7";
 
 // Список лиг
 const LEAGUES = [
