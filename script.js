@@ -24,7 +24,6 @@ const TOP_30_LEAGUES = [
   
 ];  
 
-];
 
 // Элементы DOM
 const startBtn = document.getElementById("startButton");
