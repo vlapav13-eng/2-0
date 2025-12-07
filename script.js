@@ -1,6 +1,6 @@
 // ВНИМАНИЕ: в этом файле используется ваш RapidAPI ключ, вставленный ниже.
 // Если будешь выкладывать публично — будь осторожен (ключ доступен в клиентском коде).
-const RAPIDAPI_KEY =  a66f87d6c56c44bbf95cf72c9f8363e7 ;
+const RAPIDAPI_KEY =  << a66f87d6c56c44bbf95cf72c9f8363e7 >> ;
 const RAPIDAPI_HOST = "api-football-v1.p.rapidapi.com"; // для RapidAPI wrapper v3
 
 // Интервал проверки (12 минут)
