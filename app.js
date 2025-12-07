@@ -147,8 +147,8 @@ function renderDiagnosticsPanel() {
     <div>Оставлено (мужские кандидаты): ${diag.maleCandidates}</div>
     <div>HT матчи с нужным счётом (2-0 / 0-2): ${diag.goalCandidates}</div>
     <div>Матчей с неполными данными для avg: ${diag.missingAvgData}</div>
-    <div>Отброшено по avg (&gt;1.7): ${diag.rejectedByAvg}</div>
-    <div>Прошли по avg (≤1.7 у обеих): ${diag.passedByAvg}</div>
+    <div>Отброшено по avg (&gt;7.7): ${diag.rejectedByAvg}</div>
+    <div>Прошли по avg (≤7.7 у обеих): ${diag.passedByAvg}</div>
     <div>Найдено матчей (выведено): ${diag.foundMatches}</div>
     <details>
       <summary>Примеры отфильтрованных матчей (до 20)</summary>
@@ -255,15 +255,15 @@ async function runCheck() {
       }
 
       // avg exists, check thresholds
-      if (avg.home <= 1.7 && avg.away <= 1.7) {
+      if (avg.home <= 7.7 && avg.away <= 7.7) {
         diag.passedByAvg++;
         found.push({ league: leagueName, home: homeName, away: awayName, avgHome: avg.home, avgAway: avg.away, ht: `${f.goals.home}-${f.goals.away}` });
         if (diag.samplesPassed.length < DIAG_MAX_SAMPLES) diag.samplesPassed.push({ league: leagueName, home: homeName, away: awayName, avgHome: avg.home, avgAway: avg.away });
       } else {
         diag.rejectedByAvg++;
         const reasonParts = [];
-        if (avg.home > 1.7) reasonParts.push(`home avg ${avg.home}`);
-        if (avg.away > 1.7) reasonParts.push(`away avg ${avg.away}`);
+        if (avg.home > 7.7) reasonParts.push(`home avg ${avg.home}`);
+        if (avg.away > 7.7) reasonParts.push(`away avg ${avg.away}`);
         const reason = reasonParts.join("; ");
         if (diag.samplesRejected.length < DIAG_MAX_SAMPLES) diag.samplesRejected.push({ league: leagueName, home: homeName, away: awayName, reason: reason });
       }
