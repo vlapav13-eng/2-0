@@ -45,8 +45,11 @@ let searchCountToday = 0;
 
 // helper: build regexes for exclude keywords (word-boundaries)
 const EXCLUDE_REGEXES = EXCLUDE_KEYWORDS.map(k => {
-  const esc = String(k).replace(/[.*+?^${}()|[\]\]/g, '\$&');
-  return { raw: k, re: new RegExp('\b' + esc + '\b', 'i') };
+  // экранируем специальные символы в ключевом слове для безопасного использования в RegExp
+  const esc = String(k).replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+  // используем границы слова — '\\b' в строке превращается в '\b' в RegExp
+  return { raw: k, re: new RegExp('\\b' + esc + '\\b', 'i') };
+});
 });
 
 function loadSearchCounter(){
