@@ -2,23 +2,31 @@ const API_KEY = "403e0d7c0f2f236034cf0475570195be";
 
 /* === ЗАГРУЗКА ВСЕХ МУЖСКИХ ЛИГ (ID) === */
 let ALL_MALE_LEAGUES = [];
+let leaguesLoaded = false; // <<< защита от зависания
 
 async function loadAllMaleLeagues() {
-    const res = await fetch("https://v3.football.api-sports.io/leagues", {
-        headers: { "x-rapidapi-key": API_KEY }
-    });
+    try {
+        const res = await fetch("https://v3.football.api-sports.io/leagues", {
+            headers: { "x-rapidapi-key": API_KEY }
+        });
 
-    const data = await res.json();
+        const data = await res.json();
 
-    ALL_MALE_LEAGUES = data.response
-        .filter(l => 
-            l.type === "League" &&           // убираем кубки
-            l.gender !== "Women" &&          // убираем женские
-            l.league.id                      // только валидные ID
-        )
-        .map(l => l.league.id);
+        ALL_MALE_LEAGUES = data.response
+            .filter(l =>
+                l.type === "League" &&           // убираем кубки
+                l.gender !== "Women" &&          // убираем женские
+                l.league.id                      // только валидные ID
+            )
+            .map(l => l.league.id);
 
-    console.log("Загружены мужские лиги: ", ALL_MALE_LEAGUES.length);
+        console.log("Загружено мужских лиг:", ALL_MALE_LEAGUES.length);
+
+        leaguesLoaded = true; // <<< флаг загружено
+    } catch (e) {
+        console.error("Ошибка загрузки лиг:", e);
+        alert("Ошибка загрузки лиг. Проверь интернет.");
+    }
 }
 
 loadAllMaleLeagues();
@@ -75,8 +83,10 @@ function incrementSearchCounter() {
 
 /* ==== СТАРТ ==== */
 function startSearch() {
-    if (ALL_MALE_LEAGUES.length === 0) {
-        alert("Лиги ещё загружаются, подожди 3–5 секунд.");
+
+    // <<< Новый рабочий вариант — больше нет зависания
+    if (!leaguesLoaded || ALL_MALE_LEAGUES.length === 0) {
+        alert("Лиги ещё загружаются, подожди 2–3 секунды.");
         return;
     }
 
@@ -95,6 +105,7 @@ function stopSearch() {
     statusEl.className = "red";
 }
 
+/* ==== ТАЙМЕР ==== */
 function runTimer() {
     nextCheckTime = 12 * 60;
 
@@ -198,4 +209,4 @@ function playTripleBeep() {
     audio.play();
     setTimeout(() => audio.play(), 400);
     setTimeout(() => audio.play(), 800);
-}
+}      
