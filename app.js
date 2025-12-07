@@ -1,16 +1,21 @@
-// Полный исправленный app.js
+// =====================
+//     НАСТРОЙКИ
+// =====================
 
-// === НАСТРОЙКИ ===
+// Твой ключ API-Sports
+const API_KEY = "a66f87d6c56c44bbf95cf72c9f8363e7";
+
+// Список источников (теперь уже после API_KEY!)
 const API_SOURCES = [
   {
     name: "API-Football",
-    url: (leagueId) => `https://v3.football.api-sports.io/fixtures?league=${leagueId}&season=2024`,
+    urlFixtures: (leagueId) =>
+      `https://v3.football.api-sports.io/fixtures?league=${leagueId}&season=2024`,
+    urlLastMatches: (teamId) =>
+      `https://v3.football.api-sports.io/fixtures?team=${teamId}&last=5`,
     headers: { "x-apisports-key": API_KEY }
   }
 ];
-
-// Ключ API — "a66f87d6c56c44bbf95cf72c9f8363e7";
-const API_KEY = "a66f87d6c56c44bbf95cf72c9f8363e7";
 
 // Список лиг
 const LEAGUES = [
@@ -18,85 +23,103 @@ const LEAGUES = [
   { id: 61, name: "Ligue 1" }
 ];
 
-// Ключевые слова которые нужно исключать
+// Слова для исключения
 const EXCLUDE_KEYWORDS = ["u19", "u21", "reserve", "women", "friendly"];
 
-// Исправленный блок регулярных выражений
+// Создаём RegExp
 const EXCLUDE_REGEXES = EXCLUDE_KEYWORDS.map(k => {
   const esc = String(k).replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
   return { raw: k, re: new RegExp("\\b" + esc + "\\b", "i") };
 });
 
-// === ЛОГИКА ===
-
-async function fetchFromSource(source, leagueId) {
-  const response = await fetch(source.url(leagueId), { headers: source.headers });
-  const data = await response.json();
-  return data.response || [];
-}
-
-function isExcluded(teamName) {
-  return EXCLUDE_REGEXES.some(r => r.re.test(teamName));
-}
-
-function calculateAvgGoals(last5) {
-  if (!last5 || last5.length === 0) return 0;
-  let total = 0;
-  last5.forEach(m => {
-    const h = m.goals?.home ?? 0;
-    const a = m.goals?.away ?? 0;
-    total += h + a;
-  });
-  return total / last5.length;
-}
+// =====================
+//     ЛОГИКА
+// =====================
 
 function log(msg) {
-  const logBox = document.getElementById('log');
+  const logBox = document.getElementById("log");
   logBox.value += msg + "\n";
   logBox.scrollTop = logBox.scrollHeight;
 }
 
-async function startSearch() {
-  log("Старт поиска...");
+function isExcluded(name) {
+  return EXCLUDE_REGEXES.some(k => k.re.test(name));
+}
 
-  const results = [];
+async function fetchJSON(url, headers) {
+  const res = await fetch(url, { headers });
+  const data = await res.json();
+  return data.response || [];
+}
+
+async function getLastMatches(source, teamId) {
+  const url = source.urlLastMatches(teamId);
+  return await fetchJSON(url, source.headers);
+}
+
+function calcAvgGoals(matches) {
+  if (!matches || matches.length === 0) return 0;
+
+  let total = 0;
+  for (const m of matches) {
+    total += (m.goals?.home ?? 0) + (m.goals?.away ?? 0);
+  }
+  return total / matches.length;
+}
+
+async function startSearch() {
+  log("СТАРТ ПОИСКА...");
+  const found = [];
 
   for (const league of LEAGUES) {
-    log(`\n▶ Лига: ${league.name}`);
+    log(`\nЛига: ${league.name}`);
 
     for (const src of API_SOURCES) {
       log(`Источник: ${src.name}`);
-      try {
-        const fixtures = await fetchFromSource(src, league.id);
-        log("Получено матчей: " + fixtures.length);
 
-        for (const f of fixtures) {
-          const home = f.teams.home.name;
-          const away = f.teams.away.name;
+      // Загружаем будущие матчи
+      const fixtures = await fetchJSON(src.urlFixtures(league.id), src.headers);
+      log(`Получено матчей: ${fixtures.length}`);
 
-          if (isExcluded(home) || isExcluded(away)) {
-            log(`— Исключено: ${home} vs ${away}`);
-            continue;
-          }
+      for (const f of fixtures) {
+        const home = f.teams.home;
+        const away = f.teams.away;
 
-          const avg = calculateAvgGoals(f.last_5_matches || []);
-          results.push({ match: `${home} vs ${away}`, avg });
-          log(`Матч: ${home} — ${away}, средний тотал: ${avg}`);
+        if (!home?.name || !away?.name) continue;
+
+        // Фильтр по ключевым словам
+        if (isExcluded(home.name) || isExcluded(away.name)) {
+          log(`– Исключено: ${home.name} vs ${away.name}`);
+          continue;
         }
-      } catch (e) {
-        log("Ошибка источника: " + e.message);
+
+        // Берём последние 5 матчей обеих команд
+        const lastHome = await getLastMatches(src, home.id);
+        const lastAway = await getLastMatches(src, away.id);
+
+        const avgHome = calcAvgGoals(lastHome);
+        const avgAway = calcAvgGoals(lastAway);
+
+        const avgTotal = ((avgHome + avgAway) / 2).toFixed(2);
+
+        log(
+          `Матч: ${home.name} — ${away.name} | Ср. тотал = ${avgTotal}`
+        );
+
+        found.push({
+          match: `${home.name} vs ${away.name}`,
+          avg: avgTotal
+        });
       }
     }
   }
 
   log("\n=== ГОТОВО ===");
-  console.log(results);
+  console.log(found);
 }
 
 // Привязка кнопки
 window.addEventListener("DOMContentLoaded", () => {
   const btn = document.getElementById("startButton");
-  if (btn) {
-    btn.addEventListener("click", startSearch);
-  }
+  if (btn) btn.addEventListener("click", startSearch);
 });
