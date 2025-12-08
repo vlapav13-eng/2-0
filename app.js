@@ -1,3 +1,101 @@
+const API_KEY = "a66f87d6c56c44bbf95cf72c9f8363e7";
+
+const TOP_30_LEAGUES = [
+    39, 40, 61, 135, 78, 140, 94, 88, 203, 566, // Европа
+    71, 72, 73, // Бразилия
+    128, 129, // Аргентина
+    253, 254, // США MLS
+    302, 303, // Мексика
+    197, 198, // Турция
+    179, 180, // Греция
+    200, 201, // Дания
+    262, 263, // Китай
+    301, 304, // Япония
+    392, 393  // Корея
+];
+
+let timerInterval = null;
+let nextCheckTime = 0;
+let isRunning = false;
+let searchCountToday = 0;
+
+const resultsDiv = document.getElementById("results");
+const statusEl = document.getElementById("status");
+const searchCountEl = document.getElementById("searchCount");
+const startBtn = document.getElementById("startBtn");
+const stopBtn = document.getElementById("stopBtn");
+
+// === Загружаем счётчик с даты ===
+loadSearchCounter();
+
+startBtn.onclick = () => {
+    if (!isRunning) {
+        startSearch();
+        startBtn.classList.add("active");
+    }
+};
+
+stopBtn.onclick = () => {
+    stopSearch();
+    startBtn.classList.remove("active");
+};
+
+function loadSearchCounter() {
+    const saved = localStorage.getItem("searchCounter");
+    const day = localStorage.getItem("searchDay");
+
+    const today = new Date().toDateString();
+
+    if (day !== today) {
+        searchCountToday = 0;
+        localStorage.setItem("searchDay", today);
+        localStorage.setItem("searchCounter", 0);
+    } else {
+        searchCountToday = saved ? parseInt(saved) : 0;
+    }
+
+    searchCountEl.textContent = searchCountToday;
+}
+
+function incrementSearchCounter() {
+    searchCountToday++;
+    localStorage.setItem("searchCounter", searchCountToday);
+    localStorage.setItem("searchDay", new Date().toDateString());
+    searchCountEl.textContent = searchCountToday;
+}
+
+function startSearch() {
+    isRunning = true;
+    statusEl.textContent = "запущено…";
+    statusEl.className = "green";
+
+    runCheck();
+    runTimer();
+}
+
+function stopSearch() {
+    isRunning = false;
+    clearInterval(timerInterval);
+    statusEl.textContent = "остановлено";
+    statusEl.className = "red";
+}
+
+function runTimer() {
+    nextCheckTime = 12 * 60;
+
+    timerInterval = setInterval(() => {
+        if (!isRunning) return;
+
+        nextCheckTime--;
+        document.getElementById("timer").textContent = `${nextCheckTime} сек`;
+
+        if (nextCheckTime <= 0) {
+            runCheck();
+            nextCheckTime = 12 * 60;
+        }
+    }, 1000);
+}
+
 async function runCheck() {
     incrementSearchCounter();
 
@@ -6,17 +104,15 @@ async function runCheck() {
     statusEl.className = "yellow";
 
     let matchesFound = [];
-    let apiError = false;   // <-- флаг ошибок API
+    let apiError = false;
 
     for (let league of TOP_30_LEAGUES) {
-
         try {
             const url = `https://v3.football.api-sports.io/fixtures?league=${league}&live=all`;
             const response = await fetch(url, {
                 headers: { "x-rapidapi-key": API_KEY }
             });
 
-            // Ошибка соединения / сервер недоступен
             if (!response.ok) {
                 apiError = true;
                 continue;
@@ -24,7 +120,6 @@ async function runCheck() {
 
             const data = await response.json();
 
-            // Если API вернул пустой ответ
             if (!data.response || !Array.isArray(data.response)) {
                 apiError = true;
                 continue;
@@ -57,7 +152,7 @@ async function runCheck() {
         }
     }
 
-    // === Вывод результатов ===
+    // === Вывод результата ===
 
     if (apiError && matchesFound.length === 0) {
         statusEl.textContent = "Проверка закончилась, проверить не удалось (ошибка API).";
@@ -85,4 +180,27 @@ async function runCheck() {
             </div>
         `;
     });
+}
+
+async function getAverageGoals(homeId, awayId) {
+    const url = `https://v3.football.api-sports.io/fixtures?last=5&team=`;
+    const h = await fetch(url + homeId, { headers: { "x-rapidapi-key": API_KEY } });
+    const a = await fetch(url + awayId, { headers: { "x-rapidapi-key": API_KEY } });
+
+    const hd = await h.json();
+    const ad = await a.json();
+
+    if (!hd.response.length || !ad.response.length) return null;
+
+    const hAvg = hd.response.reduce((s, m) => s + m.goals.for, 0) / hd.response.length;
+    const aAvg = ad.response.reduce((s, m) => s + m.goals.for, 0) / ad.response.length;
+
+    return { home: hAvg, away: aAvg };
+}
+
+function playTripleBeep() {
+    const audio = new Audio("beep.mp3");
+    audio.play();
+    setTimeout(() => audio.play(), 400);
+    setTimeout(() => audio.play(), 800);
 }
