@@ -1,4 +1,4 @@
-const API_KEY = "403e0d7c0f2f236034cf0475570195be";
+const API_KEY = "a66f87d6c56c44bbf95cf72c9f8363e7";
 
 /* === ЗАГРУЗКА ВСЕХ МУЖСКИХ ЛИГ (ID) === */
 let ALL_MALE_LEAGUES = [];
