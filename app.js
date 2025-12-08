@@ -1,26 +1,33 @@
-// app.js (исправленная версия)
+// =========================
+// CONFIG
+// =========================
 const API_KEY = "a66f87d6c56c44bbf95cf72c9f8363e7";
 
 const TOP_30_LEAGUES = [
-    39, 40, 61, 135, 78, 140, 94, 88, 203, 566, // Европа
-    71, 72, 73, // Бразилия
-    128, 129, // Аргентина
-    253, 254, // США MLS
-    302, 303, // Мексика
-    197, 198, // Турция
-    179, 180, // Греция
-    200, 201, // Дания
-    262, 263, // Китай
-    301, 304, // Япония
-    392, 393  // Корея
+    39,40,61,135,78,140,94,88,203,566,
+    71,72,73,
+    128,129,
+    253,254,
+    302,303,
+    197,198,
+    179,180,
+    200,201,
+    262,263,
+    301,304,
+    392,393
 ];
 
+// =========================
+// GLOBAL STATE
+// =========================
 let timerInterval = null;
 let nextCheckTime = 0;
 let isRunning = false;
 let searchCountToday = 0;
 
-// Весь код ждёт загрузки DOM — это решает проблему с "кнопка не нажимается"
+// =========================
+// WAIT FOR DOM
+// =========================
 document.addEventListener("DOMContentLoaded", () => {
     const resultsDiv = document.getElementById("results");
     const statusEl = document.getElementById("status");
@@ -30,25 +37,23 @@ document.addEventListener("DOMContentLoaded", () => {
     const timerEl = document.getElementById("timer");
 
     if (!resultsDiv || !statusEl || !searchCountEl || !startBtn || !stopBtn) {
-        console.error("Не найдены элементы DOM. Проверьте HTML: results, status, searchCount, startBtn, stopBtn должны существовать.");
+        console.error("Не найдены элементы HTML!");
         return;
     }
 
-    // === Загружаем счётчик с даты ===
     loadSearchCounter();
 
-    startBtn.addEventListener("click", () => {
+    startBtn.onclick = () => {
         if (!isRunning) {
             startSearch();
-            startBtn.classList.add("active");
         }
-    });
+    };
 
-    stopBtn.addEventListener("click", () => {
-        stopSearch();
-        startBtn.classList.remove("active");
-    });
+    stopBtn.onclick = stopSearch;
 
+    // =========================
+    // COUNTER
+    // =========================
     function loadSearchCounter() {
         const saved = localStorage.getItem("searchCounter");
         const day = localStorage.getItem("searchDay");
@@ -57,24 +62,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (day !== today) {
             searchCountToday = 0;
-            localStorage.setItem("searchDay", today);
-            localStorage.setItem("searchCounter", 0);
         } else {
-            searchCountToday = saved ? parseInt(saved, 10) : 0;
+            searchCountToday = saved ? parseInt(saved) : 0;
         }
 
         searchCountEl.textContent = searchCountToday;
     }
 
     function incrementSearchCounter() {
-        searchCountToday = (searchCountToday || 0) + 1;
+        searchCountToday++;
         localStorage.setItem("searchCounter", searchCountToday);
         localStorage.setItem("searchDay", new Date().toDateString());
         searchCountEl.textContent = searchCountToday;
     }
 
+    // =========================
+    // START / STOP
+    // =========================
     function startSearch() {
-        if (isRunning) return;
         isRunning = true;
         statusEl.textContent = "запущено…";
         statusEl.className = "green";
@@ -85,27 +90,29 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function stopSearch() {
         isRunning = false;
+
         if (timerInterval) {
             clearInterval(timerInterval);
-            timerInterval = null;
         }
+
         statusEl.textContent = "остановлено";
         statusEl.className = "red";
-        if (timerEl) timerEl.textContent = "";
+        timerEl.textContent = "";
     }
 
+    // =========================
+    // TIMER
+    // =========================
     function runTimer() {
-        // 12 минут = 720 секунд; если нужен другой интервал, поменяй число
         nextCheckTime = 12 * 60;
 
-        // защитно очищаем старый интервал, чтобы не было дублей
         if (timerInterval) clearInterval(timerInterval);
 
         timerInterval = setInterval(() => {
             if (!isRunning) return;
 
             nextCheckTime--;
-            if (timerEl) timerEl.textContent = `${nextCheckTime} сек`;
+            timerEl.textContent = `${nextCheckTime} сек`;
 
             if (nextCheckTime <= 0) {
                 runCheck();
@@ -114,77 +121,54 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 1000);
     }
 
+    // =========================
+    // CHECK
+    // =========================
     async function runCheck() {
         incrementSearchCounter();
-
         resultsDiv.innerHTML = "";
         statusEl.textContent = "проверка…";
         statusEl.className = "yellow";
 
         let matchesFound = [];
-        let apiError = false;
 
         for (let league of TOP_30_LEAGUES) {
-            try {
-                const url = `https://v3.football.api-sports.io/fixtures?league=${league}&live=all`;
-                const response = await fetch(url, {
-                    headers: { "x-rapidapi-key": API_KEY }
-                });
+            const response = await queryLeague(league);
 
-                if (!response.ok) {
-                    apiError = true;
-                    console.warn(`API ответ не ок для лиги ${league}: ${response.status}`);
-                    continue;
+            // критическая ошибка → прекращаем всё
+            if (response.stop) {
+                showError(response.msg, response.data);
+                return;
+            }
+
+            // нормальный ответ
+            if (!response.data || !response.data.response) continue;
+
+            for (let m of response.data.response) {
+                if (!m.score || !m.score.halftime) continue;
+
+                const ht = m.score.halftime.home;
+                const at = m.score.halftime.away;
+
+                if (!((ht === 2 && at === 0) || (ht === 0 && at === 2))) continue;
+
+                const avg = await getAverageGoals(m.teams.home.id, m.teams.away.id);
+                if (!avg) continue;
+
+                if (avg.home <= 1.7 && avg.away <= 1.7) {
+                    matchesFound.push({
+                        league: m.league.name,
+                        home: m.teams.home.name,
+                        away: m.teams.away.name,
+                        avgHome: avg.home,
+                        avgAway: avg.away
+                    });
                 }
-
-                const data = await response.json();
-
-                if (!data.response || !Array.isArray(data.response)) {
-                    apiError = true;
-                    console.warn(`Неправильный формат ответа для лиги ${league}`);
-                    continue;
-                }
-
-                for (let m of data.response) {
-                    // Защита: если структура ответа другая — пропускаем
-                    if (!m.score || !m.score.halftime) continue;
-
-                    const ht = m.score.halftime.home;
-                    const at = m.score.halftime.away;
-
-                    if (!((ht === 2 && at === 0) || (ht === 0 && at === 2))) continue;
-
-                    const avg = await getAverageGoals(m.teams.home.id, m.teams.away.id);
-                    if (!avg) continue;
-
-                    if (avg.home <= 1.7 && avg.away <= 1.7) {
-                        matchesFound.push({
-                            league: m.league ? m.league.name : "—",
-                            home: m.teams.home ? m.teams.home.name : "Home",
-                            away: m.teams.away ? m.teams.away.name : "Away",
-                            avgHome: avg.home,
-                            avgAway: avg.away
-                        });
-                    }
-                }
-
-            } catch (err) {
-                apiError = true;
-                console.error("Ошибка при запросе API для лиги", league, err);
             }
         }
 
-        // === Вывод результата ===
-
-        if (apiError && matchesFound.length === 0) {
-            statusEl.textContent = "Проверка закончилась, проверить не удалось (ошибка API).";
-            statusEl.className = "red";
-            return;
-        }
-
         if (matchesFound.length === 0) {
-            statusEl.textContent = "Проверка закончилась: совпадений нет.";
-            statusEl.className = "red";
+            showError("Проверка закончилась: совпадений нет.", null, false);
             return;
         }
 
@@ -194,73 +178,114 @@ document.addEventListener("DOMContentLoaded", () => {
         playTripleBeep();
 
         matchesFound.forEach(m => {
-            const node = document.createElement("div");
-            node.className = "match-box";
-            node.innerHTML = `
-                <b>${escapeHtml(m.league)}</b><br>
-                ${escapeHtml(m.home)} — ${escapeHtml(m.away)}<br>
-                Средний голов (5 игр): ${Number(m.avgHome).toFixed(2)} / ${Number(m.avgAway).toFixed(2)}
+            resultsDiv.innerHTML += `
+                <div class="match-box">
+                    <b>${m.league}</b><br>
+                    ${m.home} — ${m.away}<br>
+                    Средний голов: ${m.avgHome.toFixed(2)} / ${m.avgAway.toFixed(2)}
+                </div>
             `;
-            resultsDiv.appendChild(node);
         });
     }
 
-    async function getAverageGoals(homeId, awayId) {
+    // =========================
+    // API QUERY + ERROR HANDLING
+    // =========================
+    async function queryLeague(league) {
         try {
-            if (!homeId || !awayId) return null;
-            const url = `https://v3.football.api-sports.io/fixtures?last=5&team=`;
-            const [hResp, aResp] = await Promise.all([
-                fetch(url + homeId, { headers: { "x-rapidapi-key": API_KEY } }),
-                fetch(url + awayId, { headers: { "x-rapidapi-key": API_KEY } })
-            ]);
+            const url = `https://v3.football.api-sports.io/fixtures?league=${league}&live=all`;
 
-            if (!hResp.ok || !aResp.ok) {
-                console.warn("Ошибка при получении последних матчей для команды", homeId, awayId);
-                return null;
+            const r = await fetch(url, {
+                headers: {"x-rapidapi-key": API_KEY}
+            });
+
+            const data = await r.json();
+
+            // === 1) API возвращает ошибки
+            if (data.errors && Object.keys(data.errors).length > 0) {
+                return {
+                    stop: true,
+                    msg: "Ошибка API: " + JSON.stringify(data.errors),
+                    data
+                };
             }
 
-            const hd = await hResp.json();
-            const ad = await aResp.json();
+            // === 2) лимит исчерпан
+            if (data.message && data.message.toLowerCase().includes("rate")) {
+                return {
+                    stop: true,
+                    msg: "Ошибка: исчерпан дневной лимит API.",
+                    data
+                };
+            }
 
-            if (!hd.response || !Array.isArray(hd.response) || hd.response.length === 0) return null;
-            if (!ad.response || !Array.isArray(ad.response) || ad.response.length === 0) return null;
+            // === 3) ключ заблокирован
+            if (data.message && data.message.toLowerCase().includes("key")) {
+                return {
+                    stop: true,
+                    msg: "Ошибка: ключ API неверен или заблокирован.",
+                    data
+                };
+            }
 
-            const hAvg = hd.response.reduce((s, m) => {
-                const val = (m.goals && typeof m.goals.for === "number") ? m.goals.for : 0;
-                return s + val;
-            }, 0) / hd.response.length;
+            return { stop: false, data };
 
-            const aAvg = ad.response.reduce((s, m) => {
-                const val = (m.goals && typeof m.goals.for === "number") ? m.goals.for : 0;
-                return s + val;
-            }, 0) / ad.response.length;
-
-            return { home: hAvg, away: aAvg };
         } catch (err) {
-            console.error("getAverageGoals error:", err);
+            return {
+                stop: true,
+                msg: "Ошибка сети / API не отвечает.",
+                data: err
+            };
+        }
+    }
+
+    function showError(msg, data, critical = true) {
+        statusEl.textContent = msg;
+        statusEl.className = "red";
+
+        console.error("API ERROR:", data);
+
+        if (critical) {
+            stopSearch();
+        }
+    }
+
+    // =========================
+    // AVERAGE GOALS
+    // =========================
+    async function getAverageGoals(homeId, awayId) {
+        try {
+            const url = `https://v3.football.api-sports.io/fixtures?last=5&team=`;
+
+            const [h,a] = await Promise.all([
+                fetch(url + homeId, { headers:{ "x-rapidapi-key": API_KEY }}),
+                fetch(url + awayId, { headers:{ "x-rapidapi-key": API_KEY }})
+            ]);
+
+            const hd = await h.json();
+            const ad = await a.json();
+
+            if (!hd.response || !ad.response) return null;
+
+            const hAvg = hd.response.reduce((s,m)=>s + (m.goals?.for || 0),0)/hd.response.length;
+            const aAvg = ad.response.reduce((s,m)=>s + (m.goals?.for || 0),0)/ad.response.length;
+
+            return { home:hAvg, away:aAvg };
+
+        } catch {
             return null;
         }
     }
 
+    // =========================
+    // BEEP
+    // =========================
     function playTripleBeep() {
         try {
             const audio = new Audio("beep.mp3");
-            audio.play().catch(e => console.warn("Не удалось проиграть звук:", e));
-            setTimeout(() => audio.play().catch(() => {}), 400);
-            setTimeout(() => audio.play().catch(() => {}), 800);
-        } catch (e) {
-            console.warn("Ошибка воспроизведения звука", e);
-        }
-    }
-
-    // Простая защита от XSS при вставке текста
-    function escapeHtml(text) {
-        if (!text && text !== 0) return "";
-        return String(text)
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
+            audio.play().catch(()=>{});
+            setTimeout(()=>audio.play().catch(()=>{}),400);
+            setTimeout(()=>audio.play().catch(()=>{}),800);
+        } catch {}
     }
 });
